@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"os"
 	"regexp"
@@ -12,11 +13,24 @@ import (
 )
 
 type ScanResult struct {
-	Line   int
-	Key    string
-	Value  string
-	Reason string
-	Risk   string
+	Line   int    `json:"line"`
+	Key    string `json:"key"`
+	Value  string `json:"value"`
+	Reason string `json:"reason"`
+	Risk   string `json:"risk"`
+}
+
+type ScanOutput struct {
+	File    string       `json:"file"`
+	Results []ScanResult `json:"results"`
+	Summary ScanSummary  `json:"summary"`
+}
+
+type ScanSummary struct {
+	Critical int `json:"critical"`
+	High     int `json:"high"`
+	Medium   int `json:"medium"`
+	Total    int `json:"total"`
 }
 
 var dangerPatterns = []struct {
@@ -43,6 +57,7 @@ var scanCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		filename := args[0]
+		jsonOutput, _ := cmd.Flags().GetBool("json")
 
 		file, err := os.Open(filename)
 		if err != nil {
@@ -102,6 +117,44 @@ var scanCmd = &cobra.Command{
 			}
 		}
 
+		criticalCount := 0
+		highCount := 0
+		mediumCount := 0
+
+		for _, r := range results {
+			switch r.Risk {
+			case "CRITICAL":
+				criticalCount++
+			case "HIGH":
+				highCount++
+			case "MEDIUM":
+				mediumCount++
+			}
+		}
+
+		// JSON output
+		if jsonOutput {
+			if results == nil {
+				results = []ScanResult{}
+			}
+			out := ScanOutput{
+				File:    filename,
+				Results: results,
+				Summary: ScanSummary{
+					Critical: criticalCount,
+					High:     highCount,
+					Medium:   mediumCount,
+					Total:    len(results),
+				},
+			}
+			data, _ := json.MarshalIndent(out, "", "  ")
+			fmt.Println(string(data))
+			if criticalCount > 0 || highCount > 0 {
+				os.Exit(1)
+			}
+			return
+		}
+
 		// Colors
 		critical := color.New(color.FgRed, color.Bold)
 		high := color.New(color.FgYellow, color.Bold)
@@ -116,21 +169,14 @@ var scanCmd = &cobra.Command{
 			return
 		}
 
-		criticalCount := 0
-		highCount := 0
-		mediumCount := 0
-
 		for _, r := range results {
 			switch r.Risk {
 			case "CRITICAL":
 				critical.Printf("  ✘  [CRITICAL] Line %d: %s\n", r.Line, r.Key)
-				criticalCount++
 			case "HIGH":
 				high.Printf("  ⚠  [HIGH]     Line %d: %s\n", r.Line, r.Key)
-				highCount++
 			case "MEDIUM":
 				medium.Printf("  ~  [MEDIUM]   Line %d: %s\n", r.Line, r.Key)
-				mediumCount++
 			}
 			fmt.Printf("     Value : %s\n", r.Value)
 			fmt.Printf("     Reason: %s\n\n", r.Reason)
@@ -170,4 +216,5 @@ func riskIcon(risk string) string {
 
 func init() {
 	rootCmd.AddCommand(scanCmd)
+	scanCmd.Flags().Bool("json", false, "Output results as JSON")
 }
