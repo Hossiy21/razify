@@ -141,8 +141,9 @@ var scanCmd = &cobra.Command{
 		high.Printf("%d HIGH  ", highCount)
 		medium.Printf("%d MEDIUM\n\n", mediumCount)
 
-		if criticalCount > 0 {
+		if criticalCount > 0 || highCount > 0 {
 			critical.Println("  ✘  ACTION REQUIRED: Never commit this file to git!")
+			os.Exit(1)
 		}
 	},
 }
