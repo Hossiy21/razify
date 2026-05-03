@@ -1,0 +1,21 @@
+# binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# build output
+bin/
+dist/
+
+# environment files
+.env
+.env.local
+
+# logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
