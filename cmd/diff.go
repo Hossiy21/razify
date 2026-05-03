@@ -1,11 +1,10 @@
 package cmd
 
 import (
-	"bufio"
 	"fmt"
 	"os"
-	"strings"
 
+	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
 
@@ -29,55 +28,50 @@ var diffCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		fmt.Printf("\nComparing %s → %s\n\n", file1, file2)
+		// Colors
+		missing := color.New(color.FgRed, color.Bold)
+		added := color.New(color.FgGreen, color.Bold)
+		changed := color.New(color.FgYellow, color.Bold)
+		bold := color.New(color.Bold)
+		success := color.New(color.FgGreen)
 
-		// Keys in file1 but missing in file2
+		bold.Printf("\nComparing %s → %s\n\n", file1, file2)
+
+		diffs := 0
+
 		for key := range env1 {
 			if _, exists := env2[key]; !exists {
-				fmt.Printf("  MISSING in %s: %s\n", file2, key)
+				missing.Printf("  ✘  MISSING in %s: %s\n", file2, key)
+				diffs++
 			}
 		}
 
-		// Keys in file2 but missing in file1
 		for key := range env2 {
 			if _, exists := env1[key]; !exists {
-				fmt.Printf("  ADDED in %s:   %s\n", file2, key)
+				added.Printf("  ✔  ADDED in %s:   %s\n", file2, key)
+				diffs++
 			}
 		}
 
-		// Keys in both but different values
 		for key := range env1 {
 			if val2, exists := env2[key]; exists {
 				if env1[key] != val2 {
-					fmt.Printf("  CHANGED: %s\n    %s: %s\n    %s: %s\n", key, file1, env1[key], file2, val2)
+					changed.Printf("  ~  CHANGED: %s\n", key)
+					fmt.Printf("      %s: %s\n", file1, env1[key])
+					fmt.Printf("      %s: %s\n", file2, val2)
+					diffs++
 				}
 			}
 		}
 
-		fmt.Println("\nDone.")
+		fmt.Println()
+		if diffs == 0 {
+			success.Println("  ✔  Files are identical.")
+		} else {
+			bold.Printf("  %d difference(s) found.\n", diffs)
+		}
+		fmt.Println()
 	},
-}
-
-func parseEnvFile(filename string) (map[string]string, error) {
-	file, err := os.Open(filename)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	result := map[string]string{}
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		parts := strings.SplitN(line, "=", 2)
-		if len(parts) == 2 {
-			result[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
-		}
-	}
-	return result, scanner.Err()
 }
 
 func init() {

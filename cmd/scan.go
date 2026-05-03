@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
 
@@ -70,12 +71,10 @@ var scanCmd = &cobra.Command{
 			key := strings.TrimSpace(parts[0])
 			value := strings.TrimSpace(parts[1])
 
-			// Skip empty values
 			if value == "" {
 				continue
 			}
 
-			// Check key against danger patterns
 			for _, dp := range dangerPatterns {
 				if dp.pattern.MatchString(key) {
 					results = append(results, ScanResult{
@@ -89,7 +88,6 @@ var scanCmd = &cobra.Command{
 				}
 			}
 
-			// Check for weak values
 			for _, weak := range weakValues {
 				if strings.EqualFold(value, weak) {
 					results = append(results, ScanResult{
@@ -104,38 +102,47 @@ var scanCmd = &cobra.Command{
 			}
 		}
 
-		// Print results
-		fmt.Printf("\nScanning %s...\n\n", filename)
+		// Colors
+		critical := color.New(color.FgRed, color.Bold)
+		high := color.New(color.FgYellow, color.Bold)
+		medium := color.New(color.FgCyan)
+		success := color.New(color.FgGreen, color.Bold)
+		bold := color.New(color.Bold)
+
+		bold.Printf("\nScanning %s...\n\n", filename)
 
 		if len(results) == 0 {
-			fmt.Println("  All clear! No secrets or weak values found.")
+			success.Println("  ✔  All clear! No secrets or weak values found.")
 			return
 		}
 
-		critical := 0
-		high := 0
-		medium := 0
+		criticalCount := 0
+		highCount := 0
+		mediumCount := 0
 
 		for _, r := range results {
-			icon := riskIcon(r.Risk)
-			fmt.Printf("  %s [%s] Line %d: %s\n", icon, r.Risk, r.Line, r.Key)
-			fmt.Printf("     Value : %s\n", r.Value)
-			fmt.Printf("     Reason: %s\n\n", r.Reason)
-
 			switch r.Risk {
 			case "CRITICAL":
-				critical++
+				critical.Printf("  ✘  [CRITICAL] Line %d: %s\n", r.Line, r.Key)
+				criticalCount++
 			case "HIGH":
-				high++
+				high.Printf("  ⚠  [HIGH]     Line %d: %s\n", r.Line, r.Key)
+				highCount++
 			case "MEDIUM":
-				medium++
+				medium.Printf("  ~  [MEDIUM]   Line %d: %s\n", r.Line, r.Key)
+				mediumCount++
 			}
+			fmt.Printf("     Value : %s\n", r.Value)
+			fmt.Printf("     Reason: %s\n\n", r.Reason)
 		}
 
-		fmt.Printf("Summary: %d CRITICAL  %d HIGH  %d MEDIUM\n\n", critical, high, medium)
+		bold.Printf("Summary: ")
+		critical.Printf("%d CRITICAL  ", criticalCount)
+		high.Printf("%d HIGH  ", highCount)
+		medium.Printf("%d MEDIUM\n\n", mediumCount)
 
-		if critical > 0 {
-			fmt.Println("  ACTION REQUIRED: Never commit this file to git!")
+		if criticalCount > 0 {
+			critical.Println("  ✘  ACTION REQUIRED: Never commit this file to git!")
 		}
 	},
 }
@@ -150,9 +157,9 @@ func maskValue(value string) string {
 func riskIcon(risk string) string {
 	switch risk {
 	case "CRITICAL":
-		return "!!"
+		return "✘ "
 	case "HIGH":
-		return "! "
+		return "⚠ "
 	case "MEDIUM":
 		return "~ "
 	default:

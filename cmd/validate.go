@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
 
@@ -33,7 +34,14 @@ var validateCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		fmt.Printf("\nValidating %s against %s...\n\n", envFile, exampleFile)
+		// Colors
+		missingColor := color.New(color.FgRed, color.Bold)
+		emptyColor := color.New(color.FgYellow, color.Bold)
+		placeholderColor := color.New(color.FgCyan)
+		okColor := color.New(color.FgGreen)
+		bold := color.New(color.Bold)
+
+		bold.Printf("\nValidating %s against %s...\n\n", envFile, exampleFile)
 
 		var results []ValidationResult
 		missing := 0
@@ -83,29 +91,32 @@ var validateCmd = &cobra.Command{
 		for _, r := range results {
 			switch r.Status {
 			case "MISSING":
-				fmt.Printf("  !! [MISSING]     %s\n", r.Key)
+				missingColor.Printf("  ✘  [MISSING]     %s\n", r.Key)
 				fmt.Printf("      %s\n\n", r.Message)
 			case "EMPTY":
-				fmt.Printf("  !  [EMPTY]       %s\n", r.Key)
+				emptyColor.Printf("  ⚠  [EMPTY]       %s\n", r.Key)
 				fmt.Printf("      %s\n\n", r.Message)
 			case "PLACEHOLDER":
-				fmt.Printf("  ~  [PLACEHOLDER] %s\n", r.Key)
+				placeholderColor.Printf("  ~  [PLACEHOLDER] %s\n", r.Key)
 				fmt.Printf("      %s\n\n", r.Message)
 			case "OK":
-				fmt.Printf("  ok [OK]          %s\n", r.Key)
+				okColor.Printf("  ✔  [OK]          %s\n", r.Key)
 			}
 		}
 
-		fmt.Printf("\nSummary: %d OK   %d MISSING   %d EMPTY/PLACEHOLDER\n",
-			passed, missing, empty)
+		fmt.Println()
+		bold.Printf("Summary: ")
+		okColor.Printf("%d OK  ", passed)
+		missingColor.Printf("%d MISSING  ", missing)
+		emptyColor.Printf("%d EMPTY/PLACEHOLDER\n\n", empty)
 
 		if missing > 0 {
-			fmt.Println("\n  ACTION REQUIRED: Add missing keys before deploying!")
+			missingColor.Println("  ✘  ACTION REQUIRED: Add missing keys before deploying!")
 			os.Exit(1)
 		} else if empty > 0 {
-			fmt.Println("\n  WARNING: Some keys need real values.")
+			emptyColor.Println("  ⚠  WARNING: Some keys need real values.")
 		} else {
-			fmt.Println("\n  All required keys are present and set!")
+			okColor.Println("  ✔  All required keys are present and set!")
 		}
 	},
 }
