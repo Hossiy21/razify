@@ -276,21 +276,31 @@ razify guard uninstall
 
 ## CI/CD Integration
 
+Razify is designed to be a "Security Gate" in your CI/CD pipeline. You can use it to audit your **Staging** or **Production** environment files before they are deployed.
+
+> [!TIP]
+> Since `.env` is usually ignored by Git, use this to scan committed files like `.env.staging` or variables generated from GitHub Secrets.
+
 ```yaml
 jobs:
   validate-env:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
 
       - name: Install Razify
         run: go install github.com/Hossiy21/razify@latest
 
-      - name: Scan for secrets
-        run: razify scan .env --json
+      - name: Scan Staging Environment
+        run: razify scan .env.staging --json
 
-      - name: Validate environment
-        run: razify validate .env .env.example --json
+      - name: Validate Template Integrity
+        run: razify validate .env.staging .env.example --json
 ```
 
 ---
