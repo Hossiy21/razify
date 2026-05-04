@@ -284,6 +284,16 @@ func RunScan(filename string) ([]ScanResult, error) {
 		if !found {
 			for _, weak := range weakValues {
 				if strings.EqualFold(value, weak) {
+					keyLower := strings.ToLower(key)
+					isSecretKey := strings.Contains(keyLower, "password") ||
+						strings.Contains(keyLower, "passwd") ||
+						strings.Contains(keyLower, "secret") ||
+						strings.Contains(keyLower, "token") ||
+						strings.Contains(keyLower, "key") ||
+						strings.Contains(keyLower, "pwd")
+					if !isSecretKey {
+						break
+					}
 					results = append(results, ScanResult{
 						Line:   v.LineNum,
 						Key:    key,
