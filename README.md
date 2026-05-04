@@ -387,6 +387,6 @@ go build .
 
 <div align="center">
 
-Made by [Hossiy21](https://github.com/Hossiy21)
+Made with ❤️ in Ethiopia by [Hosaina](www.yhosaina.com)
 
 </div>
