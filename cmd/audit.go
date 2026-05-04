@@ -191,13 +191,14 @@ func RunAudit(envFile, exampleFile string) (AuditReport, error) {
 	}
 
 	// 4. Scoring
+	// 4. Scoring
 	report.Score = 100
-	report.Score -= report.ScanCritical * 25
-	report.Score -= report.ScanHigh * 10
-	report.Score -= report.ScanMedium * 5
-	report.Score -= report.Missing * 15
-	report.Score -= report.Placeholder * 5
-	report.Score -= report.Empty * 5
+	report.Score -= report.ScanCritical * 30
+	report.Score -= report.ScanHigh * 5
+	report.Score -= report.ScanMedium * 2
+	report.Score -= report.Missing * 20
+	report.Score -= report.Placeholder * 3
+	report.Score -= report.Empty * 3
 	if report.Score < 0 {
 		report.Score = 0
 	}

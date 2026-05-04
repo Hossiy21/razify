@@ -160,13 +160,28 @@ func RunValidate(envFile, exampleFile string) (int, int, int, int, []ValidationR
 
 		// Placeholder check
 		if ev.Value != "" && actualValue == ev.Value {
-			results = append(results, ValidationResult{
-				Key:     ev.Key,
-				Status:  "PLACEHOLDER",
-				Message: "Value looks like it was never changed from example",
-			})
-			placeholder++
-			continue
+			obviousPlaceholders := []string{
+				"your_", "change_me", "changeme", "xxx", "example",
+				"replace_", "fill_in", "todo", "fixme", "<", ">",
+				"placeholder", "your-", "put_your", "insert_",
+			}
+			isObvious := false
+			valueLower := strings.ToLower(actualValue)
+			for _, p := range obviousPlaceholders {
+				if strings.Contains(valueLower, p) {
+					isObvious = true
+					break
+				}
+			}
+			if isObvious {
+				results = append(results, ValidationResult{
+					Key:     ev.Key,
+					Status:  "PLACEHOLDER",
+					Message: "Value looks like it was never changed from example",
+				})
+				placeholder++
+				continue
+			}
 		}
 
 		// Advanced validation from tags
