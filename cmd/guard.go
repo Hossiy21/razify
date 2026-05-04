@@ -12,12 +12,12 @@ import (
 )
 
 var hookScript = `#!/bin/sh
-# Envy Guard — installed by envy guard install
-# Scans staged .env files before every commit
+# Razify Guard — installed by razify guard install
+# Scans staged .env files before every commit, skipping .example files
 
-# Find envy binary
-if ! command -v envy &> /dev/null; then
-    echo "envy guard: envy not found in PATH, skipping scan"
+# Find razify binary
+if ! command -v razify &> /dev/null; then
+    echo "razify guard: razify not found in PATH, skipping scan"
     exit 0
 fi
 
@@ -27,20 +27,22 @@ STAGED=$(git diff --cached --name-only)
 FAILED=0
 
 for FILE in $STAGED; do
-    # Only scan .env files
+    # Only scan .env files, but skip .example files
     if echo "$FILE" | grep -qE '(^|/)\.env(\.|$)'; then
-        echo ""
-        echo "envy guard: scanning $FILE..."
-        envy scan "$FILE"
-        if [ $? -ne 0 ]; then
-            FAILED=1
+        if ! echo "$FILE" | grep -q "\.example"; then
+            echo ""
+            echo "razify guard: scanning $FILE..."
+            razify scan "$FILE"
+            if [ $? -ne 0 ]; then
+                FAILED=1
+            fi
         fi
     fi
 done
 
 if [ $FAILED -ne 0 ]; then
     echo ""
-    echo "envy guard: commit blocked — fix secrets before committing."
+    echo "razify guard: commit blocked — fix secrets before committing."
     exit 1
 fi
 
@@ -63,7 +65,7 @@ var guardCmd = &cobra.Command{
 			statusGuard()
 		default:
 			color.Red("  Unknown action: %s\n", action)
-			fmt.Println("  Usage: envy guard [install|uninstall|status]")
+			fmt.Println("  Usage: razify guard [install|uninstall|status]")
 		}
 	},
 }
@@ -89,7 +91,7 @@ func installGuard() {
 	success := color.New(color.FgGreen, color.Bold)
 	errColor := color.New(color.FgRed, color.Bold)
 
-	bold.Println("\nInstalling Envy Guard...")
+	bold.Println("\nInstalling Razify Guard...")
 
 	hookPath, err := getHookPath()
 	if err != nil {
@@ -101,8 +103,8 @@ func installGuard() {
 	if _, err := os.Stat(hookPath); err == nil {
 		// Read existing hook
 		existing, _ := os.ReadFile(hookPath)
-		if strings.Contains(string(existing), "envy guard") {
-			color.Yellow("  ⚠  Envy Guard is already installed.\n")
+		if strings.Contains(string(existing), "razify guard") {
+			color.Yellow("  ⚠  Razify Guard is already installed.\n")
 			return
 		}
 		// Append to existing hook
@@ -122,13 +124,13 @@ func installGuard() {
 		}
 	}
 
-	success.Println("  ✔  Envy Guard installed successfully!")
+	success.Println("  ✔  Razify Guard installed successfully!")
 	fmt.Printf("     Hook location: %s\n", hookPath)
 	fmt.Println()
 	fmt.Println("  Every git commit in this repo will now be scanned.")
 	fmt.Println("  Commits with exposed secrets will be blocked automatically.")
 	fmt.Println()
-	color.Cyan("  To uninstall: envy guard uninstall\n")
+	color.Cyan("  To uninstall: razify guard uninstall\n")
 }
 
 func uninstallGuard() {
@@ -136,7 +138,7 @@ func uninstallGuard() {
 	success := color.New(color.FgGreen, color.Bold)
 	errColor := color.New(color.FgRed, color.Bold)
 
-	bold.Println("\nUninstalling Envy Guard...")
+	bold.Println("\nUninstalling Razify Guard...")
 
 	hookPath, err := getHookPath()
 	if err != nil {
@@ -145,13 +147,13 @@ func uninstallGuard() {
 	}
 
 	if _, err := os.Stat(hookPath); os.IsNotExist(err) {
-		color.Yellow("  ⚠  No hook found. Envy Guard was not installed.\n")
+		color.Yellow("  ⚠  No hook found. Razify Guard was not installed.\n")
 		return
 	}
 
 	existing, _ := os.ReadFile(hookPath)
-	if !strings.Contains(string(existing), "envy guard") {
-		color.Yellow("  ⚠  Envy Guard hook not found in pre-commit.\n")
+	if !strings.Contains(string(existing), "razify guard") {
+		color.Yellow("  ⚠  Razify Guard hook not found in pre-commit.\n")
 		return
 	}
 
@@ -162,7 +164,7 @@ func uninstallGuard() {
 		os.Exit(1)
 	}
 
-	success.Println("  ✔  Envy Guard uninstalled successfully.")
+	success.Println("  ✔  Razify Guard uninstalled successfully.")
 	fmt.Println("     Your commits are no longer being scanned.")
 }
 
@@ -170,7 +172,7 @@ func statusGuard() {
 	bold := color.New(color.Bold)
 	success := color.New(color.FgGreen, color.Bold)
 
-	bold.Println("\nEnvy Guard Status")
+	bold.Println("\nRazify Guard Status")
 	fmt.Println("  ─────────────────────────────")
 
 	hookPath, err := getHookPath()
@@ -181,17 +183,17 @@ func statusGuard() {
 
 	if _, err := os.Stat(hookPath); os.IsNotExist(err) {
 		color.Yellow("  ⚠  Not installed\n")
-		fmt.Println("     Run: envy guard install")
+		fmt.Println("     Run: razify guard install")
 		return
 	}
 
 	existing, _ := os.ReadFile(hookPath)
-	if strings.Contains(string(existing), "envy guard") {
+	if strings.Contains(string(existing), "razify guard") {
 		success.Println("  ✔  Active — commits are being protected")
 		fmt.Printf("     Hook: %s\n", hookPath)
 	} else {
-		color.Yellow("  ⚠  Pre-commit hook exists but Envy Guard is not in it\n")
-		fmt.Println("     Run: envy guard install")
+		color.Yellow("  ⚠  Pre-commit hook exists but Razify Guard is not in it\n")
+		fmt.Println("     Run: razify guard install")
 	}
 	fmt.Println()
 }

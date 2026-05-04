@@ -3,8 +3,6 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"regexp"
-	"strings"
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
@@ -24,131 +22,16 @@ var auditCmd = &cobra.Command{
 		high := color.New(color.FgYellow, color.Bold)
 		medium := color.New(color.FgCyan)
 		success := color.New(color.FgGreen, color.Bold)
-		faint := color.New(color.Faint)
 
 		bold.Println("\n  ┌─────────────────────────────┐")
-		bold.Println("  │      Envy Audit Report      │")
+		bold.Println("  │     Razify Audit Report     │")
 		bold.Println("  └─────────────────────────────┘")
 		fmt.Println()
 
-		// ── SCAN ──────────────────────────────────────────
-		faint.Println("  ▸ Running scan...")
-
-		envVars, err := parseEnvFile(envFile)
+		report, err := RunAudit(envFile, exampleFile)
 		if err != nil {
-			critical.Printf("  ✘  Could not read %s: %v\n", envFile, err)
+			fmt.Printf("Error running audit: %v\n", err)
 			os.Exit(1)
-		}
-
-		scanCritical := 0
-		scanHigh := 0
-		scanMedium := 0
-
-		dangerPats := []struct {
-			pattern *regexp.Regexp
-			risk    string
-		}{
-			{regexp.MustCompile(`(?i)(password|passwd|pwd)`), "HIGH"},
-			{regexp.MustCompile(`(?i)(secret|private_key|privatekey)`), "HIGH"},
-			{regexp.MustCompile(`(?i)(api_key|apikey|access_key)`), "HIGH"},
-			{regexp.MustCompile(`(?i)(token|auth_token|jwt)`), "HIGH"},
-			{regexp.MustCompile(`(?i)(aws_|gcp_|azure_)`), "CRITICAL"},
-			{regexp.MustCompile(`(?i)(database_url|db_url|mongo_uri)`), "HIGH"},
-			{regexp.MustCompile(`(?i)(webhook|slack_|discord_)`), "MEDIUM"},
-		}
-
-		weakVals := []string{
-			"password", "123456", "secret", "test", "admin", "changeme", "1234", "qwerty",
-		}
-
-		for key, value := range envVars {
-			if value == "" {
-				continue
-			}
-			for _, dp := range dangerPats {
-				if dp.pattern.MatchString(key) {
-					switch dp.risk {
-					case "CRITICAL":
-						scanCritical++
-					case "HIGH":
-						scanHigh++
-					case "MEDIUM":
-						scanMedium++
-					}
-					break
-				}
-			}
-			for _, weak := range weakVals {
-				if strings.EqualFold(value, weak) {
-					scanCritical++
-					break
-				}
-			}
-		}
-
-		// ── VALIDATE ──────────────────────────────────────
-		faint.Println("  ▸ Running validate...")
-
-		exampleVars, err := parseEnvFile(exampleFile)
-		if err != nil {
-			critical.Printf("  ✘  Could not read %s: %v\n", exampleFile, err)
-			os.Exit(1)
-		}
-
-		missing := 0
-		placeholder := 0
-		empty := 0
-		passed := 0
-
-		for key, exampleValue := range exampleVars {
-			actualValue, exists := envVars[key]
-			if !exists {
-				missing++
-				continue
-			}
-			if actualValue == "" {
-				empty++
-				continue
-			}
-			if exampleValue != "" && actualValue == exampleValue {
-				placeholder++
-				continue
-			}
-			passed++
-		}
-
-		// ── DIFF ──────────────────────────────────────────
-		faint.Println("  ▸ Running diff...")
-
-		diffCount := 0
-		for key := range envVars {
-			if _, exists := exampleVars[key]; !exists {
-				diffCount++
-			}
-		}
-		for key := range exampleVars {
-			if _, exists := envVars[key]; !exists {
-				diffCount++
-			}
-		}
-		for key := range envVars {
-			if val2, exists := exampleVars[key]; exists {
-				if envVars[key] != val2 {
-					diffCount++
-				}
-			}
-		}
-
-		// ── SCORE ─────────────────────────────────────────
-		score := 100
-		score -= scanCritical * 25
-		score -= scanHigh * 10
-		score -= scanMedium * 5
-		score -= missing * 15
-		score -= placeholder * 5
-		score -= empty * 5
-		if score < 0 {
-			score = 0
 		}
 
 		// ── REPORT ────────────────────────────────────────
@@ -160,40 +43,40 @@ var auditCmd = &cobra.Command{
 
 		// Scan results
 		bold.Print("  Scan        ")
-		if scanCritical > 0 {
-			critical.Printf("%d CRITICAL  ", scanCritical)
+		if report.ScanCritical > 0 {
+			critical.Printf("%d CRITICAL  ", report.ScanCritical)
 		}
-		if scanHigh > 0 {
-			high.Printf("%d HIGH  ", scanHigh)
+		if report.ScanHigh > 0 {
+			high.Printf("%d HIGH  ", report.ScanHigh)
 		}
-		if scanMedium > 0 {
-			medium.Printf("%d MEDIUM  ", scanMedium)
+		if report.ScanMedium > 0 {
+			medium.Printf("%d MEDIUM  ", report.ScanMedium)
 		}
-		if scanCritical == 0 && scanHigh == 0 && scanMedium == 0 {
+		if report.ScanCritical == 0 && report.ScanHigh == 0 && report.ScanMedium == 0 {
 			success.Print("All clear")
 		}
 		fmt.Println()
 
 		// Validate results
 		bold.Print("  Validate    ")
-		if missing > 0 {
-			critical.Printf("%d MISSING  ", missing)
+		if report.Missing > 0 {
+			critical.Printf("%d MISSING  ", report.Missing)
 		}
-		if placeholder > 0 {
-			medium.Printf("%d PLACEHOLDER  ", placeholder)
+		if report.Placeholder > 0 {
+			medium.Printf("%d PLACEHOLDER  ", report.Placeholder)
 		}
-		if empty > 0 {
-			high.Printf("%d EMPTY  ", empty)
+		if report.Empty > 0 {
+			high.Printf("%d EMPTY  ", report.Empty)
 		}
-		if passed > 0 {
-			success.Printf("%d OK  ", passed)
+		if report.Passed > 0 {
+			success.Printf("%d OK  ", report.Passed)
 		}
 		fmt.Println()
 
 		// Diff results
 		bold.Print("  Diff        ")
-		if diffCount > 0 {
-			high.Printf("%d difference(s) from %s", diffCount, exampleFile)
+		if report.DiffCount > 0 {
+			high.Printf("%d difference(s) from %s", report.DiffCount, exampleFile)
 		} else {
 			success.Print("No differences")
 		}
@@ -208,30 +91,30 @@ var auditCmd = &cobra.Command{
 
 		scoreColor := success
 		scoreLabel := "Excellent"
-		if score < 40 {
+		if report.Score < 40 {
 			scoreColor = critical
 			scoreLabel = "Critical — needs immediate attention"
-		} else if score < 60 {
+		} else if report.Score < 60 {
 			scoreColor = high
 			scoreLabel = "Poor — several issues found"
-		} else if score < 80 {
+		} else if report.Score < 80 {
 			scoreColor = medium
 			scoreLabel = "Fair — some improvements needed"
 		}
 
-		scoreColor.Printf("  %d/100  %s\n", score, scoreLabel)
+		scoreColor.Printf("  %d/100  %s\n", report.Score, scoreLabel)
 		fmt.Println()
 
 		// Recommendations
-		if scanCritical > 0 || missing > 0 {
+		if report.ScanCritical > 0 || report.Missing > 0 {
 			bold.Println("  Recommendations:")
-			if scanCritical > 0 {
+			if report.ScanCritical > 0 {
 				critical.Println("  ✘  Rotate exposed credentials immediately")
 			}
-			if missing > 0 {
+			if report.Missing > 0 {
 				high.Println("  ⚠  Add missing required variables before deploying")
 			}
-			if placeholder > 0 {
+			if report.Placeholder > 0 {
 				medium.Println("  ~  Replace placeholder values with real ones")
 			}
 			fmt.Println()
@@ -239,7 +122,87 @@ var auditCmd = &cobra.Command{
 			success.Println("  ✔  Your environment looks healthy!")
 			fmt.Println()
 		}
+
+		// Silently check for updates
+		CheckForUpdates(false)
 	},
+}
+
+type AuditReport struct {
+	Score        int
+	ScanCritical int
+	ScanHigh     int
+	ScanMedium   int
+	Missing      int
+	Placeholder  int
+	Empty        int
+	Passed       int
+	DiffCount    int
+}
+
+func RunAudit(envFile, exampleFile string) (AuditReport, error) {
+	report := AuditReport{}
+
+	// 1. Run Scan
+	scanResults, err := RunScan(envFile)
+	if err != nil {
+		return report, err
+	}
+	for _, r := range scanResults {
+		switch r.Risk {
+		case "CRITICAL":
+			report.ScanCritical++
+		case "HIGH":
+			report.ScanHigh++
+		case "MEDIUM":
+			report.ScanMedium++
+		}
+	}
+
+	// 2. Run Validate
+	missing, placeholder, empty, passed, _, err := RunValidate(envFile, exampleFile)
+	if err != nil {
+		return report, err
+	}
+	report.Missing = missing
+	report.Placeholder = placeholder
+	report.Empty = empty
+	report.Passed = passed
+
+	// 3. Diff Logic (Legacy but kept for now)
+	envVars, _ := parseEnvFile(envFile)
+	exampleVars, _ := parseEnvFile(exampleFile)
+	for key := range envVars {
+		if _, exists := exampleVars[key]; !exists {
+			report.DiffCount++
+		}
+	}
+	for key := range exampleVars {
+		if _, exists := envVars[key]; !exists {
+			report.DiffCount++
+		}
+	}
+	for key, val := range envVars {
+		if val2, exists := exampleVars[key]; exists {
+			if val != val2 {
+				report.DiffCount++
+			}
+		}
+	}
+
+	// 4. Scoring
+	report.Score = 100
+	report.Score -= report.ScanCritical * 25
+	report.Score -= report.ScanHigh * 10
+	report.Score -= report.ScanMedium * 5
+	report.Score -= report.Missing * 15
+	report.Score -= report.Placeholder * 5
+	report.Score -= report.Empty * 5
+	if report.Score < 0 {
+		report.Score = 0
+	}
+
+	return report, nil
 }
 
 func init() {

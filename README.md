@@ -1,18 +1,22 @@
 <div align="center">
 
-<img src="https://img.shields.io/badge/envy-env%20management-6C63FF?style=for-the-badge" alt="Envy" />
+<img src="https://img.shields.io/badge/razify-env%20management-6C63FF?style=for-the-badge" alt="Razify" />
 
-# Envy
+# Razify
 
 **The missing CLI tool for `.env` file management.**
 
 Diff, scan, validate, document, and audit your environment variables.  
 Offline. No cloud account. One binary. Every language.
 
+<div align="center">
+  <img src="razify-demo.gif" alt="Razify Demo" width="700" />
+</div>
+
 [![Go Version](https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat&logo=go)](https://go.dev)
 [![License](https://img.shields.io/badge/license-MIT-brightgreen?style=flat)](LICENSE)
 [![Built with Cobra](https://img.shields.io/badge/Built%20with-Cobra-blue?style=flat)](https://github.com/spf13/cobra)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat)](https://github.com/hossiy21/envy/pulls)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat)](https://github.com/Hossiy21/razify/pulls)
 
 </div>
 
@@ -27,7 +31,7 @@ Every development team has lost hours to `.env` issues:
 - **"Did someone commit a secret?"** — API keys and passwords leaked to version control
 - **"What does this variable do?"** — no one remembers, original author left the team
 
-Envy solves all four problems with a single binary.
+Razify solves all four problems with a single binary.
 
 ---
 
@@ -35,34 +39,50 @@ Envy solves all four problems with a single binary.
 
 | Command | What it does |
 |---|---|
-| `envy diff` | Compare two `.env` files and show exactly what changed |
-| `envy scan` | Detect secret leaks, weak passwords, and exposed credentials |
-| `envy validate` | Ensure all required variables are present before deploying |
-| `envy docs` | Auto-generate markdown documentation from `.env.example` |
-| `envy audit` | Full health report with a score out of 100 |
-| `envy guard` | Block git commits that contain exposed secrets |
+| `razify diff` | Compare two `.env` files and show exactly what changed |
+| `razify scan` | Detect secret leaks, weak passwords, and exposed credentials |
+| `razify validate` | Ensure all required variables are present before deploying |
+| `razify docs` | Auto-generate markdown documentation from `.env.example` |
+| `razify audit` | Full health report with a score out of 100 |
+| `razify fix` | Automatically sync missing keys from .env.example to .env |
+| `razify init` | Interactive wizard to bootstrap your .env.example file |
+| `razify version` | Check the current version and look for updates |
+| `razify guard` | Block git commits that contain exposed secrets |
 
 ---
 
 ## Installation
 
+### Homebrew (macOS/Linux)
 ```bash
-go install github.com/hossiy21/envy@latest
+brew tap Hossiy21/tap
+brew install razify
+```
+
+### Scoop (Windows)
+```bash
+scoop bucket add Hossiy21 https://github.com/Hossiy21/scoop-bucket
+scoop install razify
+```
+
+### Direct Go Install
+```bash
+go install github.com/Hossiy21/razify@latest
 ```
 
 Verify:
 ```bash
-envy --help
+razify version
 ```
 
 ---
 
 ## Usage
 
-### `envy diff` — Compare environments
+### `razify diff` — Compare environments
 
 ```bash
-envy diff .env .env.staging
+razify diff .env .env.staging
 ```
 
 ```
@@ -79,11 +99,11 @@ Comparing .env → .env.staging
 
 ---
 
-### `envy scan` — Secret leak detection
+### `razify scan` — Secret leak detection
 
 ```bash
-envy scan .env
-envy scan .env --json
+razify scan .env
+razify scan .env --json
 ```
 
 ```
@@ -104,11 +124,11 @@ Summary: 1 CRITICAL  4 HIGH  1 MEDIUM
 
 ---
 
-### `envy validate` — Pre-deploy validation
+### `razify validate` — Pre-deploy validation
 
 ```bash
-envy validate .env .env.example
-envy validate .env .env.example --json
+razify validate .env .env.example
+razify validate .env .env.example --json
 ```
 
 ```
@@ -130,11 +150,11 @@ Summary: 6 OK   1 MISSING   2 EMPTY/PLACEHOLDER
 
 ---
 
-### `envy docs` — Auto-generate documentation
+### `razify docs` — Auto-generate documentation
 
 ```bash
-envy docs .env.example
-envy docs .env.example -o ENV_DOCS.md
+razify docs .env.example
+razify docs .env.example -o ENV_DOCS.md
 ```
 
 ```
@@ -143,19 +163,47 @@ envy docs .env.example -o ENV_DOCS.md
 | `DB_HOST`      | No        | `localhost` | Primary database host          |
 | `API_KEY`      | **Yes**   | —           | Main API key for external use  |
 | `STRIPE_KEY`   | **Yes**   | —           | Stripe payment processing key  |
+
+---
+
+### `razify init` — Interactive bootstrap
+
+```bash
+razify init
+```
+
+The interactive wizard helps you create a professional `.env.example` from scratch, automatically adding validation tags like `@required` and `@type` based on your input.
+
+---
+
+### `razify fix` — Sync environment files
+
+```bash
+razify fix .env .env.example
+razify fix .env .env.example --dry-run
+```
+
+```
+Fixing .env using template .env.example...
+
+  + Added: STRIPE_KEY
+  + Added: NEW_SERVICE_URL
+
+✔ Successfully added 2 missing keys to .env!
+```
 ```
 
 ---
 
-### `envy audit` — Full health report
+### `razify audit` — Full health report
 
 ```bash
-envy audit .env .env.example
+razify audit .env .env.example
 ```
 
 ```
   ┌─────────────────────────────┐
-  │      Envy Audit Report      │
+  │     Razify Audit Report     │
   └─────────────────────────────┘
 
   ▸ Running scan...
@@ -184,16 +232,16 @@ envy audit .env .env.example
 
 ---
 
-### `envy guard` — Git commit protection
+### `razify guard` — Git commit protection
 
 ```bash
-envy guard install
-envy guard status
-envy guard uninstall
+razify guard install
+razify guard status
+razify guard uninstall
 ```
 
 ```
-  ✔  Envy Guard installed successfully!
+  ✔  Razify Guard installed successfully!
      Every git commit in this repo will now be scanned.
      Commits with exposed secrets will be blocked automatically.
 ```
@@ -209,14 +257,14 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Install Envy
-        run: go install github.com/hossiy21/envy@latest
+      - name: Install Razify
+        run: go install github.com/Hossiy21/razify@latest
 
       - name: Scan for secrets
-        run: envy scan .env --json
+        run: razify scan .env --json
 
       - name: Validate environment
-        run: envy validate .env .env.example --json
+        run: razify validate .env .env.example --json
 ```
 
 ---
@@ -226,7 +274,7 @@ jobs:
 Every command supports `--json` for scripting and AI agent integration:
 
 ```bash
-envy scan .env --json
+razify scan .env --json
 ```
 
 ```json
@@ -269,14 +317,15 @@ Works with any project that uses `.env` files.
 
 ## Roadmap
 
-- [x] `envy diff` — Compare env files
-- [x] `envy scan` — Secret leak detection
-- [x] `envy validate` — Required variable enforcement
-- [x] `envy docs` — Auto-generate documentation
-- [x] `envy audit` — Full health report
-- [x] `envy guard` — Git commit protection
+- [x] `razify diff` — Compare env files
+- [x] `razify scan` — Secret leak detection
+- [x] `razify validate` — Required variable enforcement
+- [x] `razify docs` — Auto-generate documentation
+- [x] `razify audit` — Full health report
+- [x] `razify guard` — Git commit protection
+- [x] `razify fix` — Auto-sync missing keys
+- [x] `razify init` — Interactive setup wizard
 - [x] `--json` flag — AI agent and script support
-- [ ] `envy init` — Interactive setup wizard
 - [ ] VS Code extension
 - [ ] Web dashboard
 
@@ -285,8 +334,8 @@ Works with any project that uses `.env` files.
 ## Contributing
 
 ```bash
-git clone https://github.com/hossiy21/envy.git
-cd envy
+git clone https://github.com/Hossiy21/razify.git
+cd razify
 go build .
 ```
 
@@ -300,6 +349,6 @@ go build .
 
 <div align="center">
 
-Made by [hossiy21](https://github.com/hossiy21)
+Made by [Hossiy21](https://github.com/Hossiy21)
 
 </div>

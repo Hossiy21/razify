@@ -1,4 +1,4 @@
-module github.com/hossiy21/envy
+module github.com/Hossiy21/razify
 
 go 1.25.0
 

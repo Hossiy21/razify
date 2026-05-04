@@ -1,10 +1,11 @@
 package cmd
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/fatih/color"
@@ -40,62 +41,10 @@ var validateCmd = &cobra.Command{
 		exampleFile := args[1]
 		jsonOutput, _ := cmd.Flags().GetBool("json")
 
-		envVars, err := parseEnvFile(envFile)
+		missing, placeholder, empty, okCount, results, err := RunValidate(envFile, exampleFile)
 		if err != nil {
-			fmt.Printf("Error reading %s: %v\n", envFile, err)
+			fmt.Printf("Error validating: %v\n", err)
 			os.Exit(1)
-		}
-
-		exampleVars, err := parseEnvFile(exampleFile)
-		if err != nil {
-			fmt.Printf("Error reading %s: %v\n", exampleFile, err)
-			os.Exit(1)
-		}
-
-		var results []ValidationResult
-		missing := 0
-		empty := 0
-		placeholder := 0
-		passed := 0
-
-		for key, exampleValue := range exampleVars {
-			actualValue, exists := envVars[key]
-
-			if !exists {
-				results = append(results, ValidationResult{
-					Key:     key,
-					Status:  "MISSING",
-					Message: "Required key not found in " + envFile,
-				})
-				missing++
-				continue
-			}
-
-			if actualValue == "" {
-				results = append(results, ValidationResult{
-					Key:     key,
-					Status:  "EMPTY",
-					Message: "Key exists but has no value",
-				})
-				empty++
-				continue
-			}
-
-			if exampleValue != "" && actualValue == exampleValue {
-				results = append(results, ValidationResult{
-					Key:     key,
-					Status:  "PLACEHOLDER",
-					Message: "Value looks like it was never changed from example",
-				})
-				placeholder++
-				continue
-			}
-
-			results = append(results, ValidationResult{
-				Key:    key,
-				Status: "OK",
-			})
-			passed++
 		}
 
 		// JSON output
@@ -108,7 +57,7 @@ var validateCmd = &cobra.Command{
 				ExampleFile: exampleFile,
 				Results:     results,
 				Summary: ValidateSummary{
-					Passed:      passed,
+					Passed:      okCount,
 					Missing:     missing,
 					Empty:       empty,
 					Placeholder: placeholder,
@@ -144,12 +93,15 @@ var validateCmd = &cobra.Command{
 				fmt.Printf("      %s\n\n", r.Message)
 			case "OK":
 				okColor.Printf("  ✔  [OK]          %s\n", r.Key)
+			case "INVALID":
+				missingColor.Printf("  ✘  [INVALID]     %s\n", r.Key)
+				fmt.Printf("      %s\n\n", r.Message)
 			}
 		}
 
 		fmt.Println()
 		bold.Printf("Summary: ")
-		okColor.Printf("%d OK  ", passed)
+		okColor.Printf("%d OK  ", okCount)
 		missingColor.Printf("%d MISSING  ", missing)
 		emptyColor.Printf("%d EMPTY/PLACEHOLDER\n\n", empty+placeholder)
 
@@ -164,26 +116,119 @@ var validateCmd = &cobra.Command{
 	},
 }
 
-func parseEnvFileValidate(filename string) (map[string]string, error) {
-	file, err := os.Open(filename)
+func RunValidate(envFile, exampleFile string) (int, int, int, int, []ValidationResult, error) {
+	envVars, err := parseEnvFile(envFile)
 	if err != nil {
-		return nil, err
+		return 0, 0, 0, 0, nil, err
 	}
-	defer file.Close()
 
-	result := map[string]string{}
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
+	exampleVars, err := ParseEnvWithMetadata(exampleFile)
+	if err != nil {
+		return 0, 0, 0, 0, nil, err
+	}
+
+	var results []ValidationResult
+	missing := 0
+	empty := 0
+	placeholder := 0
+	passed := 0
+
+	for _, ev := range exampleVars {
+		actualValue, exists := envVars[ev.Key]
+
+		if !exists {
+			if ev.Required {
+				results = append(results, ValidationResult{
+					Key:     ev.Key,
+					Status:  "MISSING",
+					Message: "Required key not found",
+				})
+				missing++
+			}
 			continue
 		}
-		parts := strings.SplitN(line, "=", 2)
-		if len(parts) == 2 {
-			result[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
+
+		if actualValue == "" {
+			results = append(results, ValidationResult{
+				Key:     ev.Key,
+				Status:  "EMPTY",
+				Message: "Key exists but has no value",
+			})
+			empty++
+			continue
+		}
+
+		// Placeholder check
+		if ev.Value != "" && actualValue == ev.Value {
+			results = append(results, ValidationResult{
+				Key:     ev.Key,
+				Status:  "PLACEHOLDER",
+				Message: "Value looks like it was never changed from example",
+			})
+			placeholder++
+			continue
+		}
+
+		// Advanced validation from tags
+		if errStr := validateValue(actualValue, ev.Tags); errStr != "" {
+			results = append(results, ValidationResult{
+				Key:     ev.Key,
+				Status:  "INVALID",
+				Message: errStr,
+			})
+			missing++ // Treat as missing/failed
+			continue
+		}
+
+		results = append(results, ValidationResult{
+			Key:    ev.Key,
+			Status: "OK",
+		})
+		passed++
+	}
+
+	return missing, placeholder, empty, passed, results, nil
+}
+
+func validateValue(value string, tags map[string]string) string {
+	if tags == nil {
+		return ""
+	}
+
+	// Type validation
+	if t, ok := tags["type"]; ok {
+		switch t {
+		case "int":
+			if _, err := strconv.Atoi(value); err != nil {
+				return "Value must be an integer"
+			}
+		case "bool":
+			if value != "true" && value != "false" {
+				return "Value must be 'true' or 'false'"
+			}
+		case "url":
+			if _, err := url.ParseRequestURI(value); err != nil {
+				return "Value must be a valid URL"
+			}
 		}
 	}
-	return result, scanner.Err()
+
+	// Range validation (e.g. @range=1-100)
+	if r, ok := tags["range"]; ok {
+		parts := strings.Split(r, "-")
+		if len(parts) == 2 {
+			min, _ := strconv.Atoi(parts[0])
+			max, _ := strconv.Atoi(parts[1])
+			val, err := strconv.Atoi(value)
+			if err == nil {
+				if val < min || val > max {
+					return fmt.Sprintf("Value out of range (%d-%d)", min, max)
+				}
+			}
+		}
+	}
+
+	return ""
 }
 
 func init() {
