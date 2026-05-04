@@ -1,0 +1,63 @@
+# This is a GoReleaser configuration file.
+# See https://goreleaser.com for more info.
+
+version: 2
+
+project_name: razify
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X github.com/Hossiy21/razify/cmd.CurrentVersion={{.Version}}
+
+archives:
+  - replacements:
+      darwin: Darwin
+      linux: Linux
+      windows: Windows
+      386: i386
+      amd64: x86_64
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  version_template: "{{ .Tag }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+
+brews:
+  - name: razify
+    repository:
+      owner: Hossiy21
+      name: homebrew-tap
+    homepage: "https://github.com/Hossiy21/razify"
+    description: "The missing CLI tool for .env file management"
+    test: |
+      system "#{bin}/razify version"
+
+scoops:
+  - name: razify
+    repository:
+      owner: Hossiy21
+      name: scoop-bucket
+    homepage: "https://github.com/Hossiy21/razify"
+    description: "The missing CLI tool for .env file management"
+    license: MIT
