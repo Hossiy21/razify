@@ -387,6 +387,6 @@ go build .
 
 <div align="center">
 
-Made with ❤️ in Ethiopia by [Hosaina](www.yhosaina.com)
+Made with ❤️ in Ethiopia by [Hosaina](https://www.yhosaina.com)
 
 </div>
