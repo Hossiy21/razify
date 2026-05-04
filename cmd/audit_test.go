@@ -16,7 +16,7 @@ AWS_ACCESS_KEY=AKIA1234567890
 `
 	exampleFile, _ := os.CreateTemp("", "example.env")
 	envFile, _ := os.CreateTemp("", "actual.env")
-	
+
 	defer os.Remove(exampleFile.Name())
 	defer os.Remove(envFile.Name())
 
@@ -33,8 +33,8 @@ AWS_ACCESS_KEY=AKIA1234567890
 		t.Errorf("Expected 2 critical scan issues, got %d", report.ScanCritical)
 	}
 
-	// Scoring: 100 - (2 * 25) = 50
-	if report.Score != 50 {
-		t.Errorf("Expected score 50, got %d", report.Score)
+	// Scoring: 100 - (2 * 30) = 40
+	if report.Score != 40 {
+		t.Errorf("Expected score 40, got %d", report.Score)
 	}
 }

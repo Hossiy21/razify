@@ -22,6 +22,30 @@ Offline. No cloud account. One binary. Every language.
 
 ---
 
+## ⚡ Quick Start (60 Seconds)
+
+1. **Install Razify**
+   ```bash
+   go install github.com/Hossiy21/razify@latest
+   ```
+
+2. **Initialize your project**
+   ```bash
+   razify init
+   ```
+
+3. **Protect your repository**
+   ```bash
+   razify guard install
+   ```
+
+4. **Sync missing keys**
+   ```bash
+   razify fix .env .env.example
+   ```
+
+---
+
 ## The Problem
 
 Every development team has lost hours to `.env` issues:
@@ -54,6 +78,7 @@ Razify solves all four problems with a single binary.
 ## Installation
 
 ### Homebrew (macOS/Linux)
+Install via your own personal tap (replace `Hossiy21` with your GitHub username if different):
 ```bash
 brew tap Hossiy21/tap
 brew install razify
