@@ -213,7 +213,6 @@ Fixing .env using template .env.example...
 
 ✔ Successfully added 2 missing keys to .env!
 ```
-```
 
 ---
 
