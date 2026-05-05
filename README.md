@@ -18,6 +18,8 @@ Offline. No cloud account. One binary. Every language.
 [![License](https://img.shields.io/badge/license-MIT-brightgreen?style=flat)](LICENSE)
 [![Built with Cobra](https://img.shields.io/badge/Built%20with-Cobra-blue?style=flat)](https://github.com/spf13/cobra)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat)](https://github.com/Hossiy21/razify/pulls)
+[![Go Report Card](https://goreportcard.com/badge/github.com/Hossiy21/razify)](https://goreportcard.com/report/github.com/Hossiy21/razify)
+[![Awesome Go](https://awesome.re/mentioned-badge.svg)](https://awesome-go.com)
 
 </div>
 

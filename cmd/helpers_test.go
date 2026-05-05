@@ -38,7 +38,7 @@ EMPTY_VAR=
 	expected := map[string]string{
 		"DB_HOST":    "localhost",
 		"DB_PORT":    "5432",
-		"EMPTY_VAR":   "",
+		"EMPTY_VAR":  "",
 		"SPACED_KEY": "spaced_value",
 	}
 

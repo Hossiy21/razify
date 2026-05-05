@@ -10,8 +10,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-
-
 var docsCmd = &cobra.Command{
 	Use:   "docs [example-file]",
 	Short: "Generate markdown documentation from your .env.example file",
@@ -44,8 +42,6 @@ var docsCmd = &cobra.Command{
 		fmt.Printf("\n  %d variables documented.\n", len(vars))
 	},
 }
-
-
 
 func buildMarkdown(vars []EnvVar, sourceFile string) string {
 	var sb strings.Builder

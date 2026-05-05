@@ -18,7 +18,7 @@ ADDED=newvar
 `
 	file1, _ := os.CreateTemp("", "file1.env")
 	file2, _ := os.CreateTemp("", "file2.env")
-	
+
 	defer os.Remove(file1.Name())
 	defer os.Remove(file2.Name())
 

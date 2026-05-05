@@ -18,7 +18,7 @@ PLACEHOLDER_VAR=your-value-here
 `
 	exampleFile, _ := os.CreateTemp("", "example.env")
 	envFile, _ := os.CreateTemp("", "actual.env")
-	
+
 	defer os.Remove(exampleFile.Name())
 	defer os.Remove(envFile.Name())
 

@@ -7,14 +7,14 @@ import (
 
 func TestShannonEntropy(t *testing.T) {
 	tests := []struct {
-		input    string
-		min      float64
-		max      float64
+		input string
+		min   float64
+		max   float64
 	}{
-		{"aaaaa", 0.0, 0.5},                      // Low entropy
-		{"abcde", 2.0, 3.0},                      // Medium
+		{"aaaaa", 0.0, 0.5},                            // Low entropy
+		{"abcde", 2.0, 3.0},                            // Medium
 		{"sk_live_51MszZ4SDFvks92384729384", 3.5, 5.0}, // High (Secret)
-		{"", 0.0, 0.0},                           // Empty
+		{"", 0.0, 0.0},                                 // Empty
 	}
 
 	for _, tt := range tests {
@@ -34,16 +34,16 @@ func TestValidateValue(t *testing.T) {
 		// Type: int
 		{"123", map[string]string{"type": "int"}, true},
 		{"abc", map[string]string{"type": "int"}, false},
-		
+
 		// Type: bool
 		{"true", map[string]string{"type": "bool"}, true},
 		{"false", map[string]string{"type": "bool"}, true},
 		{"yes", map[string]string{"type": "bool"}, false},
-		
+
 		// Type: url
 		{"https://google.com", map[string]string{"type": "url"}, true},
 		{"not-a-url", map[string]string{"type": "url"}, false},
-		
+
 		// Range
 		{"50", map[string]string{"range": "1-100"}, true},
 		{"150", map[string]string{"range": "1-100"}, false},
