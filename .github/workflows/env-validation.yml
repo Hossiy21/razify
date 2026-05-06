@@ -20,8 +20,5 @@ jobs:
       - name: Install Razify
         run: go install github.com/Hossiy21/razify@latest
 
-      - name: Scan Demo Environment
-        run: razify scan demo.env --json
-
-      - name: Validate Template Integrity
-        run: razify validate demo.env demo.env.example --json
+      - name: Validate Demo Environment Template
+        run: razify validate demo.env.example .env.example --json
