@@ -1,0 +1,27 @@
+name: Environment Validation
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  validate-env:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - name: Install Razify
+        run: go install github.com/Hossiy21/razify@latest
+
+      - name: Scan Demo Environment
+        run: razify scan demo.env --json
+
+      - name: Validate Template Integrity
+        run: razify validate demo.env demo.env.example --json

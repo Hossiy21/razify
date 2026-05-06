@@ -13,7 +13,7 @@ Offline. No cloud account. One binary. Every language.
   <img src="razify-demo.gif" alt="Razify Demo" width="700" />
 </div>
 
-[![Go Version](https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat&logo=go)](https://go.dev) [![Go Report Card](https://goreportcard.com/badge/github.com/Hossiy21/razify)](https://goreportcard.com/report/github.com/Hossiy21/razify) [![Awesome Go](https://awesome.re/mentioned-badge.svg)](https://awesome-go.com) [![CI](https://github.com/Hossiy21/razify/actions/workflows/ci.yml/badge.svg)](https://github.com/Hossiy21/razify/actions/workflows/ci.yml) [![License](https://img.shields.io/badge/license-MIT-brightgreen?style=flat)](LICENSE) [![Built with Cobra](https://img.shields.io/badge/Built%20with-Cobra-blue?style=flat)](https://github.com/spf13/cobra) [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat)](https://github.com/Hossiy21/razify/pulls)
+[![Go Version](https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat&logo=go)](https://go.dev) [![Go Report Card](https://goreportcard.com/badge/github.com/Hossiy21/razify)](https://goreportcard.com/report/github.com/Hossiy21/razify) [![Awesome Go](https://awesome.re/mentioned-badge.svg)](https://awesome-go.com) [![CI](https://github.com/Hossiy21/razify/actions/workflows/ci.yml/badge.svg)](https://github.com/Hossiy21/razify/actions/workflows/ci.yml) [![Env Validation](https://github.com/Hossiy21/razify/actions/workflows/env-validation.yml/badge.svg)](https://github.com/Hossiy21/razify/actions/workflows/env-validation.yml) [![License](https://img.shields.io/badge/license-MIT-brightgreen?style=flat)](LICENSE) [![Built with Cobra](https://img.shields.io/badge/Built%20with-Cobra-blue?style=flat)](https://github.com/spf13/cobra) [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat)](https://github.com/Hossiy21/razify/pulls)
 
 </div>
 
@@ -275,6 +275,8 @@ Razify is designed to be a "Security Gate" in your CI/CD pipeline. You can use i
 
 > [!TIP]
 > Since `.env` is usually ignored by Git, use this to scan committed files like `.env.staging` or variables generated from GitHub Secrets.
+
+This repository includes a dedicated GitHub Actions workflow (`.github/workflows/env-validation.yml`) that demonstrates CI integration by validating the demo environment files.
 
 ```yaml
 jobs:
