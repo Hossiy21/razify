@@ -360,10 +360,14 @@ func ShannonEntropy(data string) float64 {
 }
 
 func maskValue(value string) string {
-	if len(value) <= 8 {
-		return strings.Repeat("*", len(value))
+	if len(value) <= 4 {
+		return strings.Repeat("*", 4)
 	}
-	return value[:4] + strings.Repeat("*", len(value)-8) + value[len(value)-4:]
+	middle := len(value) - 4
+	if middle < 2 {
+		middle = 2
+	}
+	return value[:2] + strings.Repeat("*", middle) + value[len(value)-2:]
 }
 
 func riskIcon(risk string) string {
