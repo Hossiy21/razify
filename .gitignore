@@ -4,10 +4,16 @@
 *.dll
 *.so
 *.dylib
+*.vsix
+razify
 
-# build output
+# node / editor build output
 bin/
 dist/
+node_modules/
+vscode-extension/out/
+vscode-extension/node_modules/
+npm/node_modules/
 
 # environment files
 .env

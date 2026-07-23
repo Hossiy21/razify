@@ -1,19 +1,23 @@
 <div align="center">
 
-<img src="https://img.shields.io/badge/razify-env%20management-6C63FF?style=for-the-badge" alt="Razify" />
+<img src="assets/logo.png" alt="Razify Logo" width="180" />
 
 # Razify
 
-**The missing CLI tool for `.env` file management.**
+**The Configuration Integrity Engine for Environment Variables.**
 
-Diff, scan, validate, document, and audit your environment variables.  
-Offline. No cloud account. One binary. Every language.
+Type-safe validation, schema compliance, secret leak protection, and instant IDE diagnostics.  
+Sub-10ms performance. Offline-first. Zero cloud dependency. Every language.
+
+[![npm version](https://img.shields.io/npm/v/razify.svg?color=6C63FF&style=flat-square)](https://www.npmjs.com/package/razify)
+[![VS Code Extension](https://img.shields.io/badge/VS_Code-vscode--razify-blue?style=flat-square&logo=visualstudiocode)](https://github.com/Hossiy21/razify)
+[![Go Version](https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat-square&logo=go)](https://go.dev)
+[![License](https://img.shields.io/badge/license-MIT-brightgreen?style=flat-square)](LICENSE)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](https://github.com/Hossiy21/razify/pulls)
 
 <div align="center">
-  <img src="razify-demo.gif" alt="Razify Demo" width="700" />
+  <img src="razify-demo.gif" alt="Razify Demo" width="720" />
 </div>
-
-[![Go Version](https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat&logo=go)](https://go.dev) [![Go Report Card](https://goreportcard.com/badge/github.com/Hossiy21/razify)](https://goreportcard.com/report/github.com/Hossiy21/razify) [![Awesome Go](https://awesome.re/mentioned-badge.svg)](https://awesome-go.com) [![CI](https://github.com/Hossiy21/razify/actions/workflows/ci.yml/badge.svg)](https://github.com/Hossiy21/razify/actions/workflows/ci.yml) [![Env Validation](https://github.com/Hossiy21/razify/actions/workflows/env-validation.yml/badge.svg)](https://github.com/Hossiy21/razify/actions/workflows/env-validation.yml) [![License](https://img.shields.io/badge/license-MIT-brightgreen?style=flat)](LICENSE) [![Built with Cobra](https://img.shields.io/badge/Built%20with-Cobra-blue?style=flat)](https://github.com/spf13/cobra) [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat)](https://github.com/Hossiy21/razify/pulls)
 
 </div>
 
@@ -21,369 +25,149 @@ Offline. No cloud account. One binary. Every language.
 
 ## ⚡ Quick Start (60 Seconds)
 
-1. **Install Razify**
-   ```bash
-   go install github.com/Hossiy21/razify@latest
-   ```
+### Option 1: Zero-Install via `npx` (No Setup Required)
+```bash
+npx razify check
+```
 
-2. **Initialize your project**
-   ```bash
-   razify init
-   ```
+### Option 2: Installed CLI Binary
+```bash
+# Run single-pass integrity check
+razify check
 
-3. **Protect your repository**
-   ```bash
-   razify guard install
-   ```
+# Automatically sync missing template keys into .env
+razify fix
 
-4. **Sync missing keys**
-   ```bash
-   razify fix .env .env.example
-   ```
+# Protect repository with pre-commit git hook
+razify guard install
+```
 
 ---
 
-## The Problem
+## 💥 The Problem Razify Solves
 
-Every development team has lost hours to `.env` issues:
+Every engineering team loses hours to broken `.env` files:
 
-- **"It works on my machine"** — environment inconsistencies across team members
-- **"Which variables do I need?"** — no documentation, no standard
-- **"Did someone commit a secret?"** — API keys and passwords leaked to version control
-- **"What does this variable do?"** — no one remembers, original author left the team
+- ❌ **"It works on my machine"** — Inconsistent environment keys across developer setups.
+- ❌ **Runtime Type Crashes** — Application boots, but crashes when connecting to invalid URLs or ports.
+- ❌ **Accidental Secret Leaks** — Staging API keys or passwords committed to Git.
+- ❌ **Zero Documentation** — No one knows what an environment variable does after the author leaves.
 
-Razify solves all four problems with a single binary.
-
----
-
-## Features
-
-| Command | What it does |
-|---|---|
-| `razify diff` | Compare two `.env` files and show exactly what changed |
-| `razify scan` | Detect secret leaks, weak passwords, and exposed credentials |
-| `razify validate` | Ensure all required variables are present before deploying |
-| `razify docs` | Auto-generate markdown documentation from `.env.example` |
-| `razify audit` | Full health report with a score out of 100 |
-| `razify fix` | Automatically sync missing keys from .env.example to .env |
-| `razify init` | Interactive wizard to bootstrap your .env.example file |
-| `razify version` | Check the current version and look for updates |
-| `razify guard` | Block git commits that contain exposed secrets |
+**Razify solves all four problems in sub-10ms with a single tool.**
 
 ---
 
-## Installation
+## 💎 Key Features
 
-### Homebrew (macOS/Linux)
-Install via your own personal tap (replace `Hossiy21` with your GitHub username if different):
+| Feature | Command | Description |
+|---|---|---|
+| ⚡ **Unified Integrity Check** | `razify check` | **Flagship**: Single-pass schema validation, type checking & secret leak scanning. |
+| 🔒 **Secret Leak Scanner** | `razify scan` | High-entropy string detection catching API keys, JWTs, and passwords. |
+| 📋 **Type Schema Engine** | In `.env.example` | Enforces `@type(...)`, `@enum(...)`, `@range(...)`, and `@requires(...)`. |
+| 🎨 **VS Code Extension** | `vscode-razify` | Real-time red/yellow squigglies, hover tooltips & auto-completions. |
+| 🛡️ **Git Pre-Commit Guard** | `razify guard` | Sub-10ms pre-commit git hook blocking broken or insecure commits. |
+| 🤖 **GitHub Action** | `action.yml` | 1-step CI/CD Pull Request enforcement gate. |
+| 🔄 **Environment Diffing** | `razify diff` | Compare `.env` files side-by-side. |
+| 💡 **Auto-Fixer** | `razify fix` | Automatically sync missing template keys into `.env`. |
+| 📖 **Doc Generator** | `razify docs` | Auto-generate Markdown documentation from `.env.example`. |
+| 📊 **Health Auditor** | `razify audit` | Full configuration health report with a score out of 100. |
+
+---
+
+## 📝 Schema Annotations Guide
+
+Annotate your `.env.example` comments to enforce strict validation rules across your team:
+
+```ini
+# @type(port) @range(1000-65535)
+APP_PORT=3000
+
+# @enum(dev,staging,prod)
+NODE_ENV=dev
+
+# @type(email) @required
+ADMIN_EMAIL=admin@company.org
+
+# @type(url)
+DATABASE_URL=postgres://user:pass@localhost:5432/mydb
+
+# @requires(DB_HOST)
+DB_PASS=change_me
+
+# Stripe API Key for payments
+STRIPE_SECRET=sk_test_12345
+```
+
+---
+
+## 📦 Installation Options
+
+### 1. npm Zero-Install (`npx`)
+Run instantly anywhere Node.js is installed without pre-installing binaries:
+```bash
+npx razify check
+```
+
+### 2. Homebrew (macOS / Linux)
 ```bash
 brew tap Hossiy21/tap
 brew install razify
 ```
 
-### Scoop (Windows)
+### 3. Scoop (Windows)
 ```bash
 scoop bucket add Hossiy21 https://github.com/Hossiy21/scoop-bucket
 scoop install razify
 ```
 
-### Direct Go Install
+### 4. Direct Go Install
 ```bash
 go install github.com/Hossiy21/razify@latest
 ```
 
-Verify:
-```bash
-razify version
-```
+---
+
+## 🎨 VS Code / IDE Extension
+
+Install the official **`vscode-razify`** extension for Visual Studio Code / Antigravity IDE:
+
+* 🔴 **Inline Diagnostics**: Real-time red & yellow error squigglies inside `.env` files.
+* 💡 **Schema Hover Tooltips**: View `@type(...)` and `@enum(...)` schema rules on mouse hover.
+* ⚡ **Auto-Completion**: Suggests missing `.env.example` keys while typing.
+* 🛡️ **Check on Save**: Auto-runs background checks whenever a `.env` file is saved.
 
 ---
 
-## Usage
+## 🛡️ CI/CD & Team Enforcement
 
-### `razify diff` — Compare environments
-
-```bash
-razify diff .env .env.staging
-```
-
-```
-Comparing .env → .env.staging
-
-  ✘  MISSING in .env.staging: API_KEY
-  ✔  ADDED in .env.staging:   NEW_FEATURE
-  ~  CHANGED: DB_HOST
-      .env: localhost
-      .env.staging: staging.server.com
-
-7 difference(s) found.
-```
-
----
-
-### `razify scan` — Secret leak detection
-
-```bash
-razify scan .env
-razify scan .env --json
-```
-
-```
-Scanning .env...
-
-  ✘  [CRITICAL] Line 6: DB_PASSWORD
-     Value : ch****me
-     Reason: Weak or default value detected
-
-  ⚠  [HIGH]     Line 5: AWS_ACCESS_KEY
-     Value : AK****************LE
-     Reason: Cloud provider credential
-
-Summary: 1 CRITICAL  4 HIGH  1 MEDIUM
-
-  ✘  ACTION REQUIRED: Never commit this file to git!
-```
-
----
-
-### `razify validate` — Pre-deploy validation
-
-```bash
-razify validate .env .env.example
-razify validate .env .env.example --json
-```
-
-```
-Validating .env against .env.example...
-
-  ✘  [MISSING]     STRIPE_KEY
-      Required key not found in .env
-
-  ~  [PLACEHOLDER] DB_HOST
-      Value looks like it was never changed from example
-
-  ✔  [OK]          API_KEY
-  ✔  [OK]          JWT_TOKEN
-
-Summary: 6 OK   1 MISSING   2 EMPTY/PLACEHOLDER
-
-  ✘  ACTION REQUIRED: Add missing keys before deploying!
-```
-
----
-
-### `razify docs` — Auto-generate documentation
-
-```bash
-razify docs .env.example
-razify docs .env.example -o ENV_DOCS.md
-```
-
-```
-| Variable       | Required  | Default     | Description                    |
-|----------------|-----------|-------------|--------------------------------|
-| `DB_HOST`      | No        | `localhost` | Primary database host          |
-| `API_KEY`      | **Yes**   | —           | Main API key for external use  |
-| `STRIPE_KEY`   | **Yes**   | —           | Stripe payment processing key  |
-
----
-
-### `razify init` — Interactive bootstrap
-
-```bash
-razify init
-```
-
-The interactive wizard helps you create a professional `.env.example` from scratch, automatically adding validation tags like `@required` and `@type` based on your input.
-
----
-
-### `razify fix` — Sync environment files
-
-```bash
-razify fix .env .env.example
-razify fix .env .env.example --dry-run
-```
-
-```
-Fixing .env using template .env.example...
-
-  + Added: STRIPE_KEY
-  + Added: NEW_SERVICE_URL
-
-✔ Successfully added 2 missing keys to .env!
-```
-
----
-
-### `razify audit` — Full health report
-
-```bash
-razify audit .env .env.example
-```
-
-```
-  ┌─────────────────────────────┐
-  │     Razify Audit Report     │
-  └─────────────────────────────┘
-
-  ▸ Running scan...
-  ▸ Running validate...
-  ▸ Running diff...
-
-  ┌─────────────────────────────┐
-  │          Results            │
-  └─────────────────────────────┘
-
-  Scan        1 CRITICAL  4 HIGH  1 MEDIUM
-  Validate    1 MISSING  2 PLACEHOLDER  6 OK
-  Diff        7 difference(s) from .env.example
-
-  ┌─────────────────────────────┐
-  │        Health Score         │
-  └─────────────────────────────┘
-
-  5/100  Critical — needs immediate attention
-
-  Recommendations:
-  ✘  Rotate exposed credentials immediately
-  ⚠  Add missing required variables before deploying
-  ~  Replace placeholder values with real ones
-```
-
----
-
-### `razify guard` — Git commit protection
-
+### Pre-Commit Git Hook
+Protect local developer commits from leaking secrets or missing required keys:
 ```bash
 razify guard install
-razify guard status
-razify guard uninstall
 ```
 
-```
-  ✔  Razify Guard installed successfully!
-     Every git commit in this repo will now be scanned.
-     Commits with exposed secrets will be blocked automatically.
-```
-
----
-
-## CI/CD Integration
-
-Razify is designed to be a "Security Gate" in your CI/CD pipeline. You can use it to audit your **Staging** or **Production** environment files before they are deployed.
-
-> [!TIP]
-> Since `.env` is usually ignored by Git, use this to scan committed files like `.env.staging` or variables generated from GitHub Secrets.
-
-This repository includes a dedicated GitHub Actions workflow (`.github/workflows/env-validation.yml`) that demonstrates CI integration by validating the demo environment files.
+### GitHub Actions Pipeline
+Enforce environment configuration integrity in Pull Requests:
 
 ```yaml
+name: Configuration Integrity
+
+on: [push, pull_request]
+
 jobs:
-  validate-env:
+  check-env:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - name: Razify Check
+        uses: Hossiy21/razify@v1
         with:
-          go-version: '1.25'
-
-      - name: Install Razify
-        run: go install github.com/Hossiy21/razify@latest
-
-      - name: Scan Staging Environment
-        run: razify scan .env.staging --json
-
-      - name: Validate Template Integrity
-        run: razify validate .env.staging .env.example --json
+          env-file: '.env'
+          example-file: '.env.example'
 ```
 
 ---
 
-## JSON Output
+## 📄 License
 
-Every command supports `--json` for scripting and AI agent integration:
-
-```bash
-razify scan .env --json
-```
-
-```json
-{
-  "file": ".env",
-  "results": [
-    {
-      "line": 3,
-      "key": "API_KEY",
-      "value": "se*****23",
-      "reason": "Looks like an API key",
-      "risk": "HIGH"
-    }
-  ],
-  "summary": {
-    "critical": 1,
-    "high": 4,
-    "medium": 1,
-    "total": 6
-  }
-}
-```
-
----
-
-## Compatibility
-
-Works with any project that uses `.env` files.
-
-| Framework | Compatible |
-|---|---|
-| React / Next.js | ✅ |
-| Node.js | ✅ |
-| Python / Django / FastAPI | ✅ |
-| Go | ✅ |
-| Laravel (PHP) | ✅ |
-| Ruby on Rails | ✅ |
-
----
-
-## Roadmap
-
-- [x] `razify diff` — Compare env files
-- [x] `razify scan` — Secret leak detection
-- [x] `razify validate` — Required variable enforcement
-- [x] `razify docs` — Auto-generate documentation
-- [x] `razify audit` — Full health report
-- [x] `razify guard` — Git commit protection
-- [x] `razify fix` — Auto-sync missing keys
-- [x] `razify init` — Interactive setup wizard
-- [x] `--json` flag — AI agent and script support
-- [ ] VS Code extension
-- [ ] Web dashboard
-
----
-
-## Contributing
-
-Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to get started.
-
-```bash
-git clone https://github.com/Hossiy21/razify.git
-cd razify
-go build .
-```
-
----
-
-## License
-
-[MIT](LICENSE) — free to use, modify, and distribute.
-
----
-
-<div align="center">
-
-Made with ❤️ in Ethiopia by <a href="https://www.yhosaina.com" target="_blank">Hosaina</a>
-
-</div>
+MIT License © 2026 [hossiy21](https://github.com/Hossiy21).
