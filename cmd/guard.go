@@ -13,36 +13,24 @@ import (
 
 var hookScript = `#!/bin/sh
 # Razify Guard — installed by razify guard install
-# Scans staged .env files before every commit, skipping .example files
+# Runs unified integrity & secret leak check before every commit
 
-# Find razify binary
-if ! command -v razify &> /dev/null; then
-    echo "razify guard: razify not found in PATH, skipping scan"
+if ! command -v razify &> /dev/null && ! command -v npx &> /dev/null; then
+    echo "razify guard: razify CLI not found, skipping pre-commit check"
     exit 0
 fi
 
-# Get all staged files
-STAGED=$(git diff --cached --name-only)
+echo "⚡ razify guard: checking configuration integrity..."
+if command -v razify &> /dev/null; then
+    razify check --quiet
+else
+    npx --no-install razify check --quiet
+fi
 
-FAILED=0
-
-for FILE in $STAGED; do
-    # Only scan .env files, but skip .example files
-    if echo "$FILE" | grep -qE '(^|/)\.env(\.|$)'; then
-        if ! echo "$FILE" | grep -q "\.example"; then
-            echo ""
-            echo "razify guard: scanning $FILE..."
-            razify scan "$FILE"
-            if [ $? -ne 0 ]; then
-                FAILED=1
-            fi
-        fi
-    fi
-done
-
-if [ $FAILED -ne 0 ]; then
+if [ $? -ne 0 ]; then
     echo ""
-    echo "razify guard: commit blocked — fix secrets before committing."
+    echo "✘ razify guard: commit blocked due to invalid configuration or secret leak."
+    echo "👉 Run 'razify check' to view detailed findings."
     exit 1
 fi
 

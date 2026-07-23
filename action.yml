@@ -1,0 +1,33 @@
+name: 'Razify Configuration Integrity Guard'
+description: 'Type-safe environment variable validation, schema compliance, and secret leak scanning for CI/CD pipelines.'
+author: 'Hossiy21'
+branding:
+  icon: 'shield'
+  color: 'purple'
+
+inputs:
+  env-file:
+    description: 'Path to target environment file to check'
+    required: false
+    default: '.env'
+  example-file:
+    description: 'Path to environment template schema file'
+    required: false
+    default: '.env.example'
+  quiet:
+    description: 'Suppress output and run strictly for exit code'
+    required: false
+    default: 'false'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.25'
+
+    - name: Run Razify Check
+      shell: bash
+      run: |
+        go run main.go check "${{ inputs.env-file }}" "${{ inputs.example-file }}"
