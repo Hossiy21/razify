@@ -17,8 +17,8 @@ jobs:
         with:
           go-version: '1.25'
 
-      - name: Install Razify
-        run: go install github.com/Hossiy21/razify@latest
+      - name: Build Razify Binary
+        run: go build -o /tmp/razify main.go
 
       - name: Validate Demo Environment Template
-        run: razify validate demo.env.example .env.example --json
+        run: /tmp/razify validate demo.env.example .env.example --json
