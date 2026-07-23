@@ -1,0 +1,93 @@
+{
+  "name": "vscode-razify",
+  "displayName": "Razify — Configuration Integrity & Secret Guard",
+  "description": "Real-time environment variable validation, schema hover tooltips, secret leak scanning, and auto-fixes for VS Code",
+  "version": "0.1.2",
+  "publisher": "hossiy21",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Hossiy21/razify"
+  },
+  "icon": "icon.png",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Linters",
+    "Security",
+    "Programming Languages",
+    "Other"
+  ],
+  "keywords": [
+    "razify",
+    "env",
+    "dotenv",
+    "environment-variables",
+    "security",
+    "secrets",
+    "validation",
+    "linter"
+  ],
+  "activationEvents": [
+    "onLanguage:properties",
+    "onLanguage:dotenv",
+    "onLanguage:ignore",
+    "workspaceContains:.env",
+    "workspaceContains:.env.example"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "razify.check",
+        "title": "Razify: Check Environment Integrity",
+        "category": "Razify"
+      },
+      {
+        "command": "razify.fix",
+        "title": "Razify: Fix & Sync Missing Keys",
+        "category": "Razify"
+      },
+      {
+        "command": "razify.init",
+        "title": "Razify: Initialize .env.example Template",
+        "category": "Razify"
+      },
+      {
+        "command": "razify.guardInstall",
+        "title": "Razify: Install Git Pre-Commit Guard",
+        "category": "Razify"
+      }
+    ],
+    "configuration": {
+      "title": "Razify",
+      "properties": {
+        "razify.enable": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Razify environment variable validation and secret scanning."
+        },
+        "razify.checkOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically run Razify check when saving .env files."
+        },
+        "razify.executablePath": {
+          "type": "string",
+          "default": "razify",
+          "description": "Path to Razify executable binary (defaults to 'razify' in PATH or npx razify)."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^16.18.0",
+    "@types/vscode": "^1.75.0",
+    "typescript": "^5.0.0"
+  }
+}
