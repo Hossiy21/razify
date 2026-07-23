@@ -1,0 +1,36 @@
+{
+  "name": "razify",
+  "version": "1.0.1",
+  "description": "Zero-install CLI wrapper for Razify — The Configuration Integrity Engine for environment variables",
+  "main": "bin/razify.js",
+  "bin": {
+    "razify": "bin/razify.js"
+  },
+  "scripts": {
+    "test": "node bin/razify.js version"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Hossiy21/razify.git"
+  },
+  "keywords": [
+    "razify",
+    "env",
+    "dotenv",
+    "environment-variables",
+    "validation",
+    "config-integrity",
+    "secret-scanner",
+    "cli",
+    "npx"
+  ],
+  "author": "hossiy21",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/Hossiy21/razify/issues"
+  },
+  "homepage": "https://github.com/Hossiy21/razify#readme",
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
