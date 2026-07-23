@@ -6,8 +6,24 @@ package cmd
 import (
 	"os"
 
+	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
+
+var asciiLogo = `
+  ██████╗  █████╗ ███████╗██╗███████╗██╗   ██╗
+  ██╔══██╗██╔══██╗╚══███╔╝██║██╔════╝╚██╗ ██╔╝
+  ██████╔╝███████║  ███╔╝ ██║█████╗   ╚████╔╝ 
+  ██╔══██╗██╔══██║ ███╔╝  ██║██╔══╝    ╚██╔╝  
+  ██║  ██║██║  ██║███████╗██║██║        ██║   
+  ╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝╚═╝╚═╝        ╚═╝   `
+
+func PrintBanner() {
+	c := color.New(color.FgMagenta, color.Bold)
+	sub := color.New(color.FgCyan)
+	c.Println(asciiLogo)
+	sub.Printf("  ⚡ Configuration Integrity Engine v0.1.0\n\n")
+}
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -17,9 +33,10 @@ var rootCmd = &cobra.Command{
 It allows you to diff, scan, validate, document, and audit your .env files
 to ensure your application configuration is secure, documented, and consistent
 across your entire team.`,
-	// Uncomment the following line if your bare application
-	// has an action associated with it:
-	// Run: func(cmd *cobra.Command, args []string) { },
+	Run: func(cmd *cobra.Command, args []string) {
+		PrintBanner()
+		cmd.Help()
+	},
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
