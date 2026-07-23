@@ -3,8 +3,10 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -185,7 +187,7 @@ func RunValidate(envFile, exampleFile string) (int, int, int, int, []ValidationR
 		}
 
 		// Advanced validation from tags
-		if errStr := validateValue(actualValue, ev.Tags); errStr != "" {
+		if errStr := validateValue(actualValue, ev.Tags, envVars); errStr != "" {
 			results = append(results, ValidationResult{
 				Key:     ev.Key,
 				Status:  "INVALID",
@@ -205,40 +207,102 @@ func RunValidate(envFile, exampleFile string) (int, int, int, int, []ValidationR
 	return missing, placeholder, empty, passed, results, nil
 }
 
-func validateValue(value string, tags map[string]string) string {
+var (
+	emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
+	uuidRegex  = regexp.MustCompile(`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
+)
+
+func validateValue(value string, tags map[string]string, envVars map[string]string) string {
 	if tags == nil {
 		return ""
 	}
 
-	// Type validation
+	// 1. Type validation
 	if t, ok := tags["type"]; ok {
-		switch t {
-		case "int":
+		switch strings.ToLower(t) {
+		case "int", "integer":
 			if _, err := strconv.Atoi(value); err != nil {
-				return "Value must be an integer"
+				return "Value must be a valid integer"
 			}
-		case "bool":
-			if value != "true" && value != "false" {
-				return "Value must be 'true' or 'false'"
+		case "bool", "boolean":
+			valLower := strings.ToLower(value)
+			if valLower != "true" && valLower != "false" && valLower != "1" && valLower != "0" {
+				return "Value must be a boolean ('true', 'false', '1', or '0')"
 			}
-		case "url":
+		case "url", "uri":
 			if _, err := url.ParseRequestURI(value); err != nil {
-				return "Value must be a valid URL"
+				return "Value must be a valid URL (e.g. https://example.com)"
+			}
+		case "email":
+			if !emailRegex.MatchString(value) {
+				return "Value must be a valid email address"
+			}
+		case "port":
+			p, err := strconv.Atoi(value)
+			if err != nil || p < 1 || p > 65535 {
+				return "Value must be a valid network port (1 - 65535)"
+			}
+		case "uuid":
+			if !uuidRegex.MatchString(value) {
+				return "Value must be a valid UUID string"
+			}
+		case "json":
+			if !json.Valid([]byte(value)) {
+				return "Value must be valid JSON text"
+			}
+		case "ip":
+			if net.ParseIP(value) == nil {
+				return "Value must be a valid IPv4 or IPv6 address"
 			}
 		}
 	}
 
-	// Range validation (e.g. @range=1-100)
+	// 2. Enum validation (e.g. @enum(dev,staging,prod) or @enum=dev,staging,prod)
+	if e, ok := tags["enum"]; ok {
+		var options []string
+		if strings.Contains(e, "|") {
+			options = strings.Split(e, "|")
+		} else {
+			options = strings.Split(e, ",")
+		}
+		found := false
+		for _, opt := range options {
+			if strings.TrimSpace(opt) == value {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Sprintf("Value '%s' is not in allowed enum options [%s]", value, e)
+		}
+	}
+
+	// 3. Range validation (e.g. @range(1000-65535) or @range=1-100)
 	if r, ok := tags["range"]; ok {
-		parts := strings.Split(r, "-")
+		var parts []string
+		if strings.Contains(r, ",") {
+			parts = strings.Split(r, ",")
+		} else {
+			parts = strings.Split(r, "-")
+		}
 		if len(parts) == 2 {
-			min, _ := strconv.Atoi(parts[0])
-			max, _ := strconv.Atoi(parts[1])
+			min, _ := strconv.Atoi(strings.TrimSpace(parts[0]))
+			max, _ := strconv.Atoi(strings.TrimSpace(parts[1]))
 			val, err := strconv.Atoi(value)
 			if err == nil {
 				if val < min || val > max {
-					return fmt.Sprintf("Value out of range (%d-%d)", min, max)
+					return fmt.Sprintf("Value %d is out of range [%d - %d]", val, min, max)
 				}
+			}
+		}
+	}
+
+	// 4. Cross-variable dependencies (e.g. @requires(DB_HOST))
+	if reqKey, ok := tags["requires"]; ok {
+		if envVars != nil {
+			depVal, exists := envVars[reqKey]
+			if !exists || strings.TrimSpace(depVal) == "" {
+				return fmt.Sprintf("Requires dependent variable '%s' to be set in environment", reqKey)
 			}
 		}
 	}

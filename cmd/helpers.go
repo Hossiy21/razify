@@ -98,18 +98,32 @@ func ParseEnvWithMetadata(filename string) ([]EnvVar, error) {
 
 		tags := make(map[string]string)
 		if lastComment != "" {
-			// Parse tags like @type=int @range=1-100
-			tagRegex := regexp.MustCompile(`@(\w+)=([\w\-\.,]+)`)
-			matches := tagRegex.FindAllStringSubmatch(lastComment, -1)
-			for _, m := range matches {
-				tags[m[1]] = m[2]
+			// 1. Parentheses syntax: @tag(val) e.g. @type(url), @enum(dev,prod), @requires(DB_HOST)
+			tagParenRegex := regexp.MustCompile(`@(\w+)\(([^)]+)\)`)
+			for _, m := range tagParenRegex.FindAllStringSubmatch(lastComment, -1) {
+				tags[strings.ToLower(m[1])] = strings.TrimSpace(m[2])
+			}
+
+			// 2. Equals syntax: @tag=val e.g. @type=int, @range=1-100
+			tagEqRegex := regexp.MustCompile(`@(\w+)=([\w\-\.,]+)`)
+			for _, m := range tagEqRegex.FindAllStringSubmatch(lastComment, -1) {
+				tags[strings.ToLower(m[1])] = strings.TrimSpace(m[2])
+			}
+
+			// 3. Standalone boolean flags e.g. @required
+			tagStandaloneRegex := regexp.MustCompile(`@(\w+)\b`)
+			for _, m := range tagStandaloneRegex.FindAllStringSubmatch(lastComment, -1) {
+				tagName := strings.ToLower(m[1])
+				if _, exists := tags[tagName]; !exists {
+					tags[tagName] = "true"
+				}
 			}
 		}
 
-		// Required if value is empty or has a "your-" prefix, or if @required=true tag exists
+		// Required if value is empty or has a "your-" prefix, or if @required tag exists
 		required := value == "" || strings.HasPrefix(value, "your-")
 		if val, ok := tags["required"]; ok {
-			required = val == "true"
+			required = val == "true" || val == "yes" || val == "1"
 		}
 
 		vars = append(vars, EnvVar{

@@ -51,7 +51,7 @@ func TestValidateValue(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		err := validateValue(tt.val, tt.tags)
+		err := validateValue(tt.val, tt.tags, nil)
 		if (err == "") != tt.want {
 			t.Errorf("validateValue(%q, %v) error = %q; want pass = %v", tt.val, tt.tags, err, tt.want)
 		}
