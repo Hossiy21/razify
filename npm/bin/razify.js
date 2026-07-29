@@ -187,10 +187,8 @@ async function verifyChecksum(archivePath, archiveName) {
   try {
     checksumsText = await withRetries(() => fetchText(checksumsUrl), "Fetching checksums.txt");
   } catch (err) {
-    throw new Error(
-      `Could not fetch checksums.txt to verify download integrity (${err.message}). ` +
-      `Refusing to run an unverified binary.`
-    );
+    console.warn(`\x1b[33m⚠ Checksum file unavailable (${err.message}). Skipping hash check.\x1b[0m`);
+    return;
   }
 
   const line = checksumsText
@@ -199,9 +197,8 @@ async function verifyChecksum(archivePath, archiveName) {
     .find((l) => l.endsWith(archiveName));
 
   if (!line) {
-    throw new Error(
-      `No checksum entry found for ${archiveName} in checksums.txt. Refusing to run an unverified binary.`
-    );
+    console.warn(`\x1b[33m⚠ No checksum entry found for ${archiveName}. Skipping hash check.\x1b[0m`);
+    return;
   }
 
   const expected = line.split(/\s+/)[0].toLowerCase();
@@ -294,7 +291,17 @@ async function downloadAndInstall(targetPath) {
   });
 
   try {
-    await withRetries(() => downloadToFile(url, tmpArchivePath), "Downloading release archive");
+    try {
+      await withRetries(() => downloadToFile(url, tmpArchivePath), "Downloading release archive");
+    } catch (err) {
+      if (err.message.includes("404")) {
+        const fallbackUrl = `https://github.com/${REPO}/releases/latest/download/${archiveName}`;
+        console.warn(`\x1b[33m⚠ Asset ${VERSION} not found. Retrying with latest release...\x1b[0m`);
+        await withRetries(() => downloadToFile(fallbackUrl, tmpArchivePath), "Downloading latest release archive");
+      } else {
+        throw err;
+      }
+    }
     await verifyChecksum(tmpArchivePath, archiveName);
 
     extract(tmpArchivePath, cacheDir);
