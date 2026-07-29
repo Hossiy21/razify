@@ -7,6 +7,7 @@ on:
       - main
     paths:
       - 'npm/**'
+      - '.github/workflows/publish-npm.yml'
 
 jobs:
   publish:
@@ -22,12 +23,9 @@ jobs:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
 
-      - name: Install Dependencies
-        working-directory: ./npm
-        run: npm ci || true
-
       - name: Publish Package to NPM
         working-directory: ./npm
         run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
