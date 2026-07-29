@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -103,9 +103,7 @@ function runDiagnostics(document: vscode.TextDocument, showStatusMessage = false
     const cwd = workspaceFolder ? workspaceFolder.uri.fsPath : path.dirname(document.fileName);
     const execPath = config.get<string>('executablePath', 'razify');
 
-    const cmd = `${execPath} check --json`;
-
-    exec(cmd, { cwd }, (error, stdout) => {
+    execFile(execPath, ['check', '--json'], { cwd }, (error, stdout) => {
         if (!stdout) {
             return;
         }
@@ -266,7 +264,8 @@ function runCliCommand(subcmd: string, successMessage: string) {
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
     const cwd = workspaceFolder ? workspaceFolder.uri.fsPath : process.cwd();
 
-    exec(`${execPath} ${subcmd}`, { cwd }, (error, stdout) => {
+    const args = subcmd.split(' ');
+    execFile(execPath, args, { cwd }, (error, stdout) => {
         if (error) {
             vscode.window.showErrorMessage(`Razify Error: ${error.message}`);
         } else {

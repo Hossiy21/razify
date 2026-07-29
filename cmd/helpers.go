@@ -18,6 +18,12 @@ type EnvVar struct {
 	Ignored  bool
 }
 
+var (
+	tagParenRegex      = regexp.MustCompile(`@(\w+)\(([^)]+)\)`)
+	tagEqRegex         = regexp.MustCompile(`@(\w+)=([\w\-\.,]+)`)
+	tagStandaloneRegex = regexp.MustCompile(`@(\w+)\b`)
+)
+
 func parseEnvFile(filename string) (map[string]string, error) {
 	file, err := os.Open(filename)
 	if err != nil {
@@ -99,19 +105,16 @@ func ParseEnvWithMetadata(filename string) ([]EnvVar, error) {
 		tags := make(map[string]string)
 		if lastComment != "" {
 			// 1. Parentheses syntax: @tag(val) e.g. @type(url), @enum(dev,prod), @requires(DB_HOST)
-			tagParenRegex := regexp.MustCompile(`@(\w+)\(([^)]+)\)`)
 			for _, m := range tagParenRegex.FindAllStringSubmatch(lastComment, -1) {
 				tags[strings.ToLower(m[1])] = strings.TrimSpace(m[2])
 			}
 
 			// 2. Equals syntax: @tag=val e.g. @type=int, @range=1-100
-			tagEqRegex := regexp.MustCompile(`@(\w+)=([\w\-\.,]+)`)
 			for _, m := range tagEqRegex.FindAllStringSubmatch(lastComment, -1) {
 				tags[strings.ToLower(m[1])] = strings.TrimSpace(m[2])
 			}
 
 			// 3. Standalone boolean flags e.g. @required
-			tagStandaloneRegex := regexp.MustCompile(`@(\w+)\b`)
 			for _, m := range tagStandaloneRegex.FindAllStringSubmatch(lastComment, -1) {
 				tagName := strings.ToLower(m[1])
 				if _, exists := tags[tagName]; !exists {

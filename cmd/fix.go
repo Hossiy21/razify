@@ -257,6 +257,9 @@ func createBackup(filename string) (string, error) {
 	timestamp := time.Now().Format("20060102_150405")
 	backupPath := filepath.Join(dir, fmt.Sprintf("%s.backup_%s", base, timestamp))
 
+	// Ensure backup pattern is ignored in .gitignore
+	_ = ensureBackupIgnored(dir)
+
 	// Create backup file with secure permissions (0600 = owner read/write only)
 	dest, err := os.OpenFile(backupPath, os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
@@ -271,3 +274,25 @@ func createBackup(filename string) (string, error) {
 
 	return backupPath, nil
 }
+
+// ensureBackupIgnored adds .env.backup_* to .gitignore if not present
+func ensureBackupIgnored(dir string) error {
+	gitignorePath := filepath.Join(dir, ".gitignore")
+	pattern := "*.backup_*"
+
+	if content, err := os.ReadFile(gitignorePath); err == nil {
+		if bytes.Contains(content, []byte(pattern)) || bytes.Contains(content, []byte(".env.backup_")) {
+			return nil
+		}
+		// Append pattern
+		f, err := os.OpenFile(gitignorePath, os.O_APPEND|os.O_WRONLY, 0644)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		_, err = f.WriteString("\n# Razify backup files\n" + pattern + "\n")
+		return err
+	}
+	return nil
+}
+

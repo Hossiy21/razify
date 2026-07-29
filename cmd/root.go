@@ -22,7 +22,7 @@ func PrintBanner() {
 	c := color.New(color.FgMagenta, color.Bold)
 	sub := color.New(color.FgCyan)
 	c.Println(asciiLogo)
-	sub.Printf("  ⚡ Configuration Integrity Engine v0.1.0\n\n")
+	sub.Printf("  ⚡ Configuration Integrity Engine %s\n\n", CurrentVersion)
 }
 
 // rootCmd represents the base command when called without any subcommands
