@@ -8,7 +8,8 @@
 razify
 
 # node / editor build output
-bin/
+/bin/
+!npm/bin/
 dist/
 node_modules/
 vscode-extension/out/

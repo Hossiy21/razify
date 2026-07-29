@@ -1,6 +1,6 @@
 {
   "name": "razify",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Zero-install CLI wrapper for Razify — The Configuration Integrity Engine for environment variables",
   "main": "bin/razify.js",
   "bin": {
