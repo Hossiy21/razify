@@ -19,6 +19,10 @@ The benchmark suite is executed inside the isolated Docker sandbox via `go test 
 | **MCP Tool Listing** | `BenchmarkMCP_ToolsList` | **31.02 µs** (31,021 ns) | 73,518 B | 44 allocs |
 | **MCP Schema Inspection** | `BenchmarkMCP_SchemaInspect` | **150.05 µs** (150,057 ns) | 77,285 B | 59 allocs |
 | **MCP Candidate Config Validation** | `BenchmarkMCP_EnvValidateConfig` | **153.82 µs** (153,822 ns) | 75,655 B | 59 allocs |
+| **Go AST Code Extraction** | `BenchmarkExtract_Go` | **13.18 µs** (13,175 ns) | 11,224 B | 195 allocs |
+| **TypeScript/JavaScript Extraction** | `BenchmarkExtract_JS` | **14.10 µs** (14,104 ns) | 5,517 B | 24 allocs |
+| **Python Code Extraction** | `BenchmarkExtract_Python` | **13.69 µs** (13,685 ns) | 5,441 B | 21 allocs |
+| **Schema Template Generation** | `BenchmarkGenerateEnvExample` | **9.61 µs** (9,614 ns) | 7,611 B | 64 allocs |
 | **Full Single-Pass Check (with Disk I/O)** | `BenchmarkCheck` | **5.25 ms** (5,247,518 ns) | 17,787 B | 78 allocs |
 
 ### Performance SLA Verification
@@ -26,6 +30,7 @@ The benchmark suite is executed inside the isolated Docker sandbox via `go test 
 - ✅ **Secret pattern & entropy scan:** ~11.7 µs per environment file.
 - ✅ **Sandbox argv generation & stream masking:** ~10–21 µs overhead.
 - ✅ **MCP JSON-RPC 2.0 tool execution:** ~31–153 µs latency per request with zero secret disclosure.
+- ✅ **Multi-language AST Extraction:** ~9–14 µs per source file analysis.
 - ✅ **End-to-End `razify check` with disk I/O:** ~5.2 ms (surpassing the sub-10ms requirement).
 - ✅ **Zero Network Overhead:** Offline-first architecture ensures 0ms network latency.
 
