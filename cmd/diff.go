@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/Hossiy21/razify/internal/reporter"
+	"github.com/Hossiy21/razify/internal/schema"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
@@ -19,7 +21,7 @@ var diffCmd = &cobra.Command{
 		diffs, results, err := RunDiff(file1, file2)
 		if err != nil {
 			fmt.Printf("Error comparing files: %v\n", err)
-			os.Exit(1)
+			os.Exit(reporter.ExitError)
 		}
 
 		// Colors
@@ -47,10 +49,11 @@ var diffCmd = &cobra.Command{
 		fmt.Println()
 		if diffs == 0 {
 			success.Println("  ✔  Files are identical.")
+			os.Exit(reporter.ExitClean)
 		} else {
 			bold.Printf("  %d difference(s) found.\n", diffs)
+			os.Exit(getViolationExitCode())
 		}
-		fmt.Println()
 	},
 }
 
@@ -62,12 +65,12 @@ type DiffResult struct {
 }
 
 func RunDiff(file1, file2 string) (int, []DiffResult, error) {
-	env1, err := parseEnvFile(file1)
+	env1, err := schema.ParseEnvFile(file1)
 	if err != nil {
 		return 0, nil, err
 	}
 
-	env2, err := parseEnvFile(file2)
+	env2, err := schema.ParseEnvFile(file2)
 	if err != nil {
 		return 0, nil, err
 	}

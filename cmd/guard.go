@@ -84,7 +84,7 @@ func installGuard() {
 	hookPath, err := getHookPath()
 	if err != nil {
 		errColor.Printf("  ✘  %v\n", err)
-		os.Exit(1)
+		os.Exit(2)
 	}
 
 	// Check if hook already exists
@@ -99,7 +99,7 @@ func installGuard() {
 		f, err := os.OpenFile(hookPath, os.O_APPEND|os.O_WRONLY, 0755)
 		if err != nil {
 			errColor.Printf("  ✘  Could not modify existing hook: %v\n", err)
-			os.Exit(1)
+			os.Exit(2)
 		}
 		defer f.Close()
 		f.WriteString("\n" + hookScript)
@@ -108,7 +108,7 @@ func installGuard() {
 		err = os.WriteFile(hookPath, []byte(hookScript), 0755)
 		if err != nil {
 			errColor.Printf("  ✘  Could not install hook: %v\n", err)
-			os.Exit(1)
+			os.Exit(2)
 		}
 	}
 
@@ -131,7 +131,7 @@ func uninstallGuard() {
 	hookPath, err := getHookPath()
 	if err != nil {
 		errColor.Printf("  ✘  %v\n", err)
-		os.Exit(1)
+		os.Exit(2)
 	}
 
 	if _, err := os.Stat(hookPath); os.IsNotExist(err) {
@@ -149,7 +149,7 @@ func uninstallGuard() {
 	err = os.Remove(hookPath)
 	if err != nil {
 		errColor.Printf("  ✘  Could not remove hook: %v\n", err)
-		os.Exit(1)
+		os.Exit(2)
 	}
 
 	success.Println("  ✔  Razify Guard uninstalled successfully.")

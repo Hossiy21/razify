@@ -1,0 +1,36 @@
+{
+  "env_file": "../testdata/fixtures/clean.env",
+  "example_file": "../testdata/fixtures/clean.env.example",
+  "status": "PASSED",
+  "validation_results": [
+    {
+      "key": "PORT",
+      "status": "OK",
+      "message": ""
+    },
+    {
+      "key": "NODE_ENV",
+      "status": "OK",
+      "message": ""
+    },
+    {
+      "key": "APP_NAME",
+      "status": "OK",
+      "message": ""
+    }
+  ],
+  "validation_summary": {
+    "passed": 3,
+    "missing": 0,
+    "empty": 0,
+    "placeholder": 0
+  },
+  "secret_scan_results": [],
+  "secret_scan_summary": {
+    "critical": 0,
+    "high": 0,
+    "medium": 0,
+    "total": 0
+  },
+  "remediation_steps": null
+}

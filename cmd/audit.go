@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/Hossiy21/razify/internal/reporter"
+	"github.com/Hossiy21/razify/internal/scanner"
+	"github.com/Hossiy21/razify/internal/schema"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
@@ -31,7 +34,7 @@ var auditCmd = &cobra.Command{
 		report, err := RunAudit(envFile, exampleFile)
 		if err != nil {
 			fmt.Printf("Error running audit: %v\n", err)
-			os.Exit(1)
+			os.Exit(reporter.ExitError)
 		}
 
 		// ── REPORT ────────────────────────────────────────
@@ -118,13 +121,12 @@ var auditCmd = &cobra.Command{
 				medium.Println("  ~  Replace placeholder values with real ones")
 			}
 			fmt.Println()
+			os.Exit(getViolationExitCode())
 		} else {
 			success.Println("  ✔  Your environment looks healthy!")
 			fmt.Println()
+			os.Exit(reporter.ExitClean)
 		}
-
-		// Silently check for updates
-		CheckForUpdates(false)
 	},
 }
 
@@ -144,7 +146,7 @@ func RunAudit(envFile, exampleFile string) (AuditReport, error) {
 	report := AuditReport{}
 
 	// 1. Run Scan
-	scanResults, err := RunScan(envFile)
+	scanResults, err := scanner.RunScan(envFile)
 	if err != nil {
 		return report, err
 	}
@@ -160,7 +162,7 @@ func RunAudit(envFile, exampleFile string) (AuditReport, error) {
 	}
 
 	// 2. Run Validate
-	missing, placeholder, empty, passed, _, err := RunValidate(envFile, exampleFile)
+	missing, placeholder, empty, passed, _, err := schema.RunValidate(envFile, exampleFile)
 	if err != nil {
 		return report, err
 	}
@@ -169,9 +171,15 @@ func RunAudit(envFile, exampleFile string) (AuditReport, error) {
 	report.Empty = empty
 	report.Passed = passed
 
-	// 3. Diff Logic (Legacy but kept for now)
-	envVars, _ := parseEnvFile(envFile)
-	exampleVars, _ := parseEnvFile(exampleFile)
+	// 3. Diff Logic
+	envVars, err := schema.ParseEnvFile(envFile)
+	if err != nil {
+		return report, err
+	}
+	exampleVars, err := schema.ParseEnvFile(exampleFile)
+	if err != nil {
+		return report, err
+	}
 	for key := range envVars {
 		if _, exists := exampleVars[key]; !exists {
 			report.DiffCount++
@@ -190,7 +198,6 @@ func RunAudit(envFile, exampleFile string) (AuditReport, error) {
 		}
 	}
 
-	// 4. Scoring
 	// 4. Scoring
 	report.Score = 100
 	report.Score -= report.ScanCritical * 30

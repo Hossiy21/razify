@@ -1,0 +1,33 @@
+{
+  "env_file": "../testdata/fixtures/missing.env",
+  "example_file": "../testdata/fixtures/missing.env.example",
+  "status": "FAILED",
+  "validation_results": [
+    {
+      "key": "PORT",
+      "status": "OK",
+      "message": ""
+    },
+    {
+      "key": "API_KEY",
+      "status": "MISSING",
+      "message": "Required key not found"
+    }
+  ],
+  "validation_summary": {
+    "passed": 1,
+    "missing": 1,
+    "empty": 0,
+    "placeholder": 0
+  },
+  "secret_scan_results": [],
+  "secret_scan_summary": {
+    "critical": 0,
+    "high": 0,
+    "medium": 0,
+    "total": 0
+  },
+  "remediation_steps": [
+    "👉 Run 'razify fix ../testdata/fixtures/missing.env ../testdata/fixtures/missing.env.example' to sync missing keys into ../testdata/fixtures/missing.env."
+  ]
+}

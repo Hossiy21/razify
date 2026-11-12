@@ -4,20 +4,24 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 
+	"github.com/Hossiy21/razify/internal/reporter"
+	"github.com/Hossiy21/razify/internal/scanner"
+	"github.com/Hossiy21/razify/internal/schema"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
 
 type CheckOutput struct {
-	EnvFile            string             `json:"env_file"`
-	ExampleFile        string             `json:"example_file"`
-	Status             string             `json:"status"` // "PASSED" or "FAILED"
-	ValidationResults  []ValidationResult `json:"validation_results"`
-	ValidationSummary  ValidateSummary    `json:"validation_summary"`
-	SecretScanResults  []ScanResult       `json:"secret_scan_results"`
-	SecretScanSummary  ScanSummary        `json:"secret_scan_summary"`
-	RemediationSteps   []string           `json:"remediation_steps"`
+	EnvFile           string                    `json:"env_file"`
+	ExampleFile       string                    `json:"example_file"`
+	Status            string                    `json:"status"` // "PASSED" or "FAILED"
+	ValidationResults []schema.ValidationResult `json:"validation_results"`
+	ValidationSummary schema.ValidateSummary    `json:"validation_summary"`
+	SecretScanResults []scanner.ScanResult      `json:"secret_scan_results"`
+	SecretScanSummary scanner.ScanSummary       `json:"secret_scan_summary"`
+	RemediationSteps  []string                  `json:"remediation_steps"`
 }
 
 var checkCmd = &cobra.Command{
@@ -29,6 +33,7 @@ If no files are specified, it auto-detects .env and .env.example in the current 
 	Args: cobra.MaximumNArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		jsonOutput, _ := cmd.Flags().GetBool("json")
+		sarifOutput, _ := cmd.Flags().GetBool("sarif")
 		quietOutput, _ := cmd.Flags().GetBool("quiet")
 
 		envFile := ".env"
@@ -66,7 +71,7 @@ If no files are specified, it auto-detects .env and .env.example in the current 
 				fmt.Printf("✘ Error: Environment file '%s' not found.\n", envFile)
 				fmt.Println("👉 Tip: Create a .env file or run 'razify check <env-file> <example-file>' to specify custom paths.")
 			}
-			os.Exit(1)
+			os.Exit(reporter.ExitError)
 		}
 
 		if !fileExists(exampleFile) {
@@ -74,7 +79,7 @@ If no files are specified, it auto-detects .env and .env.example in the current 
 				fmt.Printf("✘ Error: Template file '%s' not found.\n", exampleFile)
 				fmt.Println("👉 Tip: Run 'razify init' to generate a .env.example file.")
 			}
-			os.Exit(1)
+			os.Exit(reporter.ExitError)
 		}
 
 		output, err := RunCheck(envFile, exampleFile)
@@ -82,7 +87,32 @@ If no files are specified, it auto-detects .env and .env.example in the current 
 			if !quietOutput {
 				fmt.Printf("✘ Error executing check: %v\n", err)
 			}
-			os.Exit(1)
+			os.Exit(reporter.ExitError)
+		}
+
+		// SARIF Mode
+		if sarifOutput {
+			res := reporter.BuildResult(
+				output.EnvFile,
+				output.ExampleFile,
+				output.ValidationSummary,
+				output.ValidationResults,
+				output.SecretScanSummary,
+				output.SecretScanResults,
+				output.RemediationSteps,
+			)
+			sarifText, err := reporter.RenderSarif(res, CurrentVersion)
+			if err != nil {
+				if !quietOutput {
+					fmt.Printf("✘ Error generating SARIF: %v\n", err)
+				}
+				os.Exit(reporter.ExitError)
+			}
+			fmt.Println(sarifText)
+			if output.Status == "FAILED" {
+				os.Exit(getViolationExitCode())
+			}
+			return
 		}
 
 		// JSON Mode
@@ -90,7 +120,7 @@ If no files are specified, it auto-detects .env and .env.example in the current 
 			data, _ := json.MarshalIndent(output, "", "  ")
 			fmt.Println(string(data))
 			if output.Status == "FAILED" {
-				os.Exit(1)
+				os.Exit(getViolationExitCode())
 			}
 			return
 		}
@@ -98,7 +128,7 @@ If no files are specified, it auto-detects .env and .env.example in the current 
 		// Quiet Mode
 		if quietOutput {
 			if output.Status == "FAILED" {
-				os.Exit(1)
+				os.Exit(getViolationExitCode())
 			}
 			return
 		}
@@ -138,17 +168,16 @@ If no files are specified, it auto-detects .env and .env.example in the current 
 			fmt.Println("\n📋 Findings & Diagnostics:")
 
 			for _, v := range output.ValidationResults {
-				if v.Status == "MISSING" || v.Status == "INVALID" {
+				switch v.Status {
+				case "MISSING", "INVALID":
 					red.Printf("  ✘ [VALIDATION] Key: %s — %s\n", v.Key, v.Message)
-				} else if v.Status == "EMPTY" || v.Status == "PLACEHOLDER" {
+				case "EMPTY", "PLACEHOLDER":
 					yellow.Printf("  ⚠ [VALIDATION] Key: %s — %s\n", v.Key, v.Message)
 				}
 			}
 
 			for _, s := range output.SecretScanResults {
-				if s.Risk == "CRITICAL" {
-					red.Printf("  ✘ [SECRET] Line %d (%s): %s (%s)\n", s.Line, s.Key, s.Reason, s.Value)
-				} else if s.Risk == "HIGH" {
+				if s.Risk == "CRITICAL" || s.Risk == "HIGH" {
 					red.Printf("  ✘ [SECRET] Line %d (%s): %s (%s)\n", s.Line, s.Key, s.Reason, s.Value)
 				} else {
 					cyan.Printf("  ~ [SECRET] Line %d (%s): %s (%s)\n", s.Line, s.Key, s.Reason, s.Value)
@@ -168,7 +197,7 @@ If no files are specified, it auto-detects .env and .env.example in the current 
 
 		if output.Status == "FAILED" {
 			red.Println("  ✘ FAILED: Resolve required issues before committing or deploying.")
-			os.Exit(1)
+			os.Exit(getViolationExitCode())
 		} else {
 			green.Println("  ✔ PASSED: Environment configuration is secure and complete!")
 		}
@@ -176,12 +205,12 @@ If no files are specified, it auto-detects .env and .env.example in the current 
 }
 
 func RunCheck(envFile, exampleFile string) (CheckOutput, error) {
-	missing, placeholder, empty, passed, valResults, err := RunValidate(envFile, exampleFile)
+	missing, placeholder, empty, passed, valResults, err := schema.RunValidate(envFile, exampleFile)
 	if err != nil {
 		return CheckOutput{}, err
 	}
 
-	scanResults, err := RunScan(envFile)
+	scanResults, err := scanner.RunScan(envFile)
 	if err != nil {
 		return CheckOutput{}, err
 	}
@@ -205,37 +234,40 @@ func RunCheck(envFile, exampleFile string) (CheckOutput, error) {
 		status = "FAILED"
 	}
 
+	cleanEnv := filepath.ToSlash(envFile)
+	cleanExample := filepath.ToSlash(exampleFile)
+
 	var remediation []string
 	if missing > 0 {
-		remediation = append(remediation, fmt.Sprintf("👉 Run 'razify fix %s %s' to sync missing keys into %s.", envFile, exampleFile, envFile))
+		remediation = append(remediation, fmt.Sprintf("👉 Run 'razify fix %s %s' to sync missing keys into %s.", cleanEnv, cleanExample, cleanEnv))
 	}
 	if criticalCount > 0 || highCount > 0 {
-		remediation = append(remediation, fmt.Sprintf("👉 Remove or obfuscate exposed API keys in %s before committing.", envFile))
+		remediation = append(remediation, fmt.Sprintf("👉 Remove or obfuscate exposed API keys in %s before committing.", cleanEnv))
 	}
 	if placeholder > 0 || empty > 0 {
-		remediation = append(remediation, fmt.Sprintf("👉 Replace placeholder values in %s with real development settings.", envFile))
+		remediation = append(remediation, fmt.Sprintf("👉 Replace placeholder values in %s with real development settings.", cleanEnv))
 	}
 
 	if valResults == nil {
-		valResults = []ValidationResult{}
+		valResults = []schema.ValidationResult{}
 	}
 	if scanResults == nil {
-		scanResults = []ScanResult{}
+		scanResults = []scanner.ScanResult{}
 	}
 
 	output := CheckOutput{
-		EnvFile:           envFile,
-		ExampleFile:       exampleFile,
+		EnvFile:           cleanEnv,
+		ExampleFile:       cleanExample,
 		Status:            status,
 		ValidationResults: valResults,
-		ValidationSummary: ValidateSummary{
+		ValidationSummary: schema.ValidateSummary{
 			Passed:      passed,
 			Missing:     missing,
 			Empty:       empty,
 			Placeholder: placeholder,
 		},
 		SecretScanResults: scanResults,
-		SecretScanSummary: ScanSummary{
+		SecretScanSummary: scanner.ScanSummary{
 			Critical: criticalCount,
 			High:     highCount,
 			Medium:   mediumCount,
@@ -250,5 +282,6 @@ func RunCheck(envFile, exampleFile string) (CheckOutput, error) {
 func init() {
 	rootCmd.AddCommand(checkCmd)
 	checkCmd.Flags().Bool("json", false, "Output results as JSON")
+	checkCmd.Flags().Bool("sarif", false, "Output results as SARIF v2.1.0")
 	checkCmd.Flags().Bool("quiet", false, "Suppress output and exit with status code 0 (pass) or 1 (fail)")
 }

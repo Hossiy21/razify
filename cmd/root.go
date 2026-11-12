@@ -4,8 +4,10 @@ Copyright © 2026 hossiy21
 package cmd
 
 import (
+	"fmt"
 	"os"
 
+	"github.com/Hossiy21/razify/internal/reporter"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
@@ -17,6 +19,8 @@ var asciiLogo = `
   ██╔══██╗██╔══██║ ███╔╝  ██║██╔══╝    ╚██╔╝  
   ██║  ██║██║  ██║███████╗██║██║        ██║   
   ╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝╚═╝╚═╝        ╚═╝   `
+
+var overrideExitCode int
 
 func PrintBanner() {
 	c := color.New(color.FgMagenta, color.Bold)
@@ -33,6 +37,12 @@ var rootCmd = &cobra.Command{
 It allows you to diff, scan, validate, document, and audit your .env files
 to ensure your application configuration is secure, documented, and consistent
 across your entire team.`,
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		if overrideExitCode == 0 || overrideExitCode == 2 {
+			return fmt.Errorf("invalid --exit-code value %d: code 0 is reserved for clean passes, and 2 is reserved for fatal errors", overrideExitCode)
+		}
+		return nil
+	},
 	Run: func(cmd *cobra.Command, args []string) {
 		PrintBanner()
 		cmd.Help()
@@ -44,18 +54,19 @@ across your entire team.`,
 func Execute() {
 	err := rootCmd.Execute()
 	if err != nil {
-		os.Exit(1)
+		os.Exit(reporter.ExitError)
 	}
 }
 
+// getViolationExitCode returns the configured exit code when violations are detected.
+func getViolationExitCode() int {
+	if overrideExitCode >= 0 {
+		return overrideExitCode
+	}
+	return reporter.ExitViolation
+}
+
 func init() {
-	// Here you will define your flags and configuration settings.
-	// Cobra supports persistent flags, which, if defined here,
-	// will be global for your application.
-
-	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.razify.yaml)")
-
-	// Cobra also supports local flags, which will only run
-	// when this action is called directly.
+	rootCmd.PersistentFlags().IntVar(&overrideExitCode, "exit-code", -1, "Override the exit code returned when violations are found (default 1, values 0 and 2 reserved)")
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }

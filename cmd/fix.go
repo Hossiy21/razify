@@ -6,32 +6,17 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sync"
 	"time"
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
 
-// fileLocks tracks locks per file to prevent concurrent modifications
-var fileLocks = make(map[string]*sync.Mutex)
-var locksMutex = &sync.Mutex{}
-
-// getFileLock returns a mutex for a specific file (creates one if it doesn't exist)
-func getFileLock(filename string) *sync.Mutex {
-	locksMutex.Lock()
-	defer locksMutex.Unlock()
-
-	if _, exists := fileLocks[filename]; !exists {
-		fileLocks[filename] = &sync.Mutex{}
-	}
-	return fileLocks[filename]
-}
-
 // acquireFileLock attempts to acquire a lock on a file with retries
 func acquireFileLock(filename string, maxRetries int) error {
 	lockFile := filename + ".lock"
 	retries := 0
+	var lastErr error
 
 	for retries < maxRetries {
 		// Try to create lock file exclusively (atomic operation)
@@ -40,27 +25,32 @@ func acquireFileLock(filename string, maxRetries int) error {
 			f.Close()
 			return nil
 		}
+		lastErr = err
 
-		// Check if lock file is stale (older than 30 seconds)
-		if os.IsExist(err) {
+		// Check if lock file is held by another process (exists or permission denied during concurrent open on Windows)
+		if os.IsExist(err) || os.IsPermission(err) {
 			if info, err := os.Stat(lockFile); err == nil {
 				if time.Since(info.ModTime()) > 30*time.Second {
 					// Lock is stale, remove it
-					os.Remove(lockFile)
+					_ = os.Remove(lockFile)
 					retries = 0
 					continue
 				}
 			}
 			retries++
 			if retries < maxRetries {
-				time.Sleep(100 * time.Millisecond)
+				// Bounded wait: e.g. 20 retries * 75ms = 1.5s total timeout
+				time.Sleep(75 * time.Millisecond)
 			}
 			continue
 		}
 
-		return fmt.Errorf("failed to acquire lock: %w", err)
+		return fmt.Errorf("failed to acquire lock on %s: %w", lockFile, err)
 	}
 
+	if lastErr != nil {
+		return fmt.Errorf("could not acquire lock on %s after %d attempts: %w", filename, maxRetries, lastErr)
+	}
 	return fmt.Errorf("could not acquire lock on %s after %d attempts", filename, maxRetries)
 }
 
@@ -127,7 +117,7 @@ var fixCmd = &cobra.Command{
 		added, backup, err := RunFix(envFile, exampleFile, dryRun, noBackup)
 		if err != nil {
 			fmt.Printf("Error: %v\n", err)
-			os.Exit(1)
+			os.Exit(2)
 		}
 
 		success := color.New(color.FgGreen, color.Bold)
@@ -182,7 +172,7 @@ func RunFix(envFile, exampleFile string, dryRun, noBackup bool) (int, string, er
 	}
 
 	// 4. Acquire file lock to prevent concurrent modifications
-	if err := acquireFileLock(envFile, 5); err != nil {
+	if err := acquireFileLock(envFile, 20); err != nil {
 		return 0, "", fmt.Errorf("cannot acquire lock on %s: %v", envFile, err)
 	}
 	defer releaseFileLock(envFile)

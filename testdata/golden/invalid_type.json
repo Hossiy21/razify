@@ -1,0 +1,33 @@
+{
+  "env_file": "../testdata/fixtures/invalid.env",
+  "example_file": "../testdata/fixtures/invalid.env.example",
+  "status": "FAILED",
+  "validation_results": [
+    {
+      "key": "ADMIN_EMAIL",
+      "status": "INVALID",
+      "message": "Value must be a valid email address"
+    },
+    {
+      "key": "APP_PORT",
+      "status": "INVALID",
+      "message": "Value must be a valid network port (1 - 65535)"
+    }
+  ],
+  "validation_summary": {
+    "passed": 0,
+    "missing": 2,
+    "empty": 0,
+    "placeholder": 0
+  },
+  "secret_scan_results": [],
+  "secret_scan_summary": {
+    "critical": 0,
+    "high": 0,
+    "medium": 0,
+    "total": 0
+  },
+  "remediation_steps": [
+    "👉 Run 'razify fix ../testdata/fixtures/invalid.env ../testdata/fixtures/invalid.env.example' to sync missing keys into ../testdata/fixtures/invalid.env."
+  ]
+}
