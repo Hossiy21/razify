@@ -12,7 +12,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var hookScript = `#!/bin/sh
+const (
+	hookMarkerStart = "# --- razify:guard:start ---"
+	hookMarkerEnd   = "# --- razify:guard:end ---"
+)
+
+var hookScript = hookMarkerStart + `
 # Razify Guard — installed by razify guard install
 # Runs unified integrity & secret leak check before every commit
 
@@ -34,9 +39,7 @@ if [ $? -ne 0 ]; then
     echo "👉 Run 'razify check' to view detailed findings."
     exit 1
 fi
-
-exit 0
-`
+` + hookMarkerEnd
 
 var guardCmd = &cobra.Command{
 	Use:   "guard [install|uninstall|status]",
@@ -85,6 +88,19 @@ func getHookPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
+
+	cmd := exec.Command("git", "config", "--get", "core.hooksPath")
+	cmd.Dir = root
+	if out, err := cmd.Output(); err == nil {
+		hooksPath := strings.TrimSpace(string(out))
+		if hooksPath != "" {
+			if filepath.IsAbs(hooksPath) {
+				return filepath.Join(hooksPath, "pre-commit"), nil
+			}
+			return filepath.Join(root, hooksPath, "pre-commit"), nil
+		}
+	}
+
 	return filepath.Join(root, ".git", "hooks", "pre-commit"), nil
 }
 
@@ -101,26 +117,34 @@ func installGuard() {
 		os.Exit(2)
 	}
 
+	// Ensure hook directory exists
+	if err := os.MkdirAll(filepath.Dir(hookPath), 0755); err != nil {
+		errColor.Printf("  ✘  Could not create hooks directory: %v\n", err)
+		os.Exit(2)
+	}
+
 	// Check if hook already exists
-	if _, err := os.Stat(hookPath); err == nil {
-		// Read existing hook
-		existing, _ := os.ReadFile(hookPath)
-		if strings.Contains(string(existing), "razify guard") {
+	if existingBytes, err := os.ReadFile(hookPath); err == nil {
+		existing := string(existingBytes)
+		if strings.Contains(existing, hookMarkerStart) || strings.Contains(existing, "razify guard") {
 			color.Yellow("  ⚠  Razify Guard is already installed.\n")
 			return
 		}
-		// Append to existing hook
-		f, err := os.OpenFile(hookPath, os.O_APPEND|os.O_WRONLY, 0755)
-		if err != nil {
+
+		var sb strings.Builder
+		sb.WriteString(existing)
+		if !strings.HasSuffix(existing, "\n") {
+			sb.WriteString("\n")
+		}
+		sb.WriteString("\n" + hookScript + "\n")
+		if err := os.WriteFile(hookPath, []byte(sb.String()), 0755); err != nil {
 			errColor.Printf("  ✘  Could not modify existing hook: %v\n", err)
 			os.Exit(2)
 		}
-		defer f.Close()
-		f.WriteString("\n" + hookScript)
 	} else {
-		// Create new hook
-		err = os.WriteFile(hookPath, []byte(hookScript), 0755)
-		if err != nil {
+		// Create new standalone hook
+		content := "#!/bin/sh\n\n" + hookScript + "\n"
+		if err := os.WriteFile(hookPath, []byte(content), 0755); err != nil {
 			errColor.Printf("  ✘  Could not install hook: %v\n", err)
 			os.Exit(2)
 		}
@@ -153,17 +177,65 @@ func uninstallGuard() {
 		return
 	}
 
-	existing, _ := os.ReadFile(hookPath)
-	if !strings.Contains(string(existing), "razify guard") {
+	existingBytes, err := os.ReadFile(hookPath)
+	if err != nil {
+		errColor.Printf("  ✘  Could not read hook file: %v\n", err)
+		os.Exit(2)
+	}
+
+	content := string(existingBytes)
+	if !strings.Contains(content, hookMarkerStart) && !strings.Contains(content, "razify guard") {
 		color.Yellow("  ⚠  Razify Guard hook not found in pre-commit.\n")
 		return
 	}
 
-	// Remove the hook file entirely
-	err = os.Remove(hookPath)
-	if err != nil {
-		errColor.Printf("  ✘  Could not remove hook: %v\n", err)
-		os.Exit(2)
+	// Slice out Razify hook block
+	startIdx := strings.Index(content, hookMarkerStart)
+	endIdx := strings.Index(content, hookMarkerEnd)
+
+	var remaining string
+	if startIdx != -1 && endIdx != -1 && endIdx > startIdx {
+		endIdx += len(hookMarkerEnd)
+		remaining = content[:startIdx] + content[endIdx:]
+	} else {
+		// Fallback for legacy hook format without markers
+		var keptLines []string
+		inRazifyBlock := false
+		for _, line := range strings.Split(content, "\n") {
+			if strings.Contains(line, "razify guard") || strings.Contains(line, "razify check") {
+				inRazifyBlock = true
+				continue
+			}
+			if inRazifyBlock && (line == "" || strings.HasPrefix(line, "if ") || strings.HasPrefix(line, "fi") || strings.HasPrefix(line, "echo ") || strings.HasPrefix(line, "exit ")) {
+				continue
+			}
+			inRazifyBlock = false
+			keptLines = append(keptLines, line)
+		}
+		remaining = strings.Join(keptLines, "\n")
+	}
+
+	// Clean up whitespace and empty comments
+	trimmed := strings.TrimSpace(remaining)
+	cleanCheck := strings.TrimPrefix(trimmed, "#!/bin/sh")
+	cleanCheck = strings.TrimPrefix(cleanCheck, "#!/bin/bash")
+	cleanCheck = strings.TrimSpace(cleanCheck)
+
+	if cleanCheck == "" {
+		// Hook only had Razify guard, clean uninstall deletes the file
+		if err := os.Remove(hookPath); err != nil {
+			errColor.Printf("  ✘  Could not remove hook file: %v\n", err)
+			os.Exit(2)
+		}
+	} else {
+		// Preserve user's existing hook commands
+		if !strings.HasSuffix(trimmed, "\n") {
+			trimmed += "\n"
+		}
+		if err := os.WriteFile(hookPath, []byte(trimmed), 0755); err != nil {
+			errColor.Printf("  ✘  Could not update hook file: %v\n", err)
+			os.Exit(2)
+		}
 	}
 
 	success.Println("  ✔  Razify Guard uninstalled successfully.")
@@ -255,12 +327,22 @@ func installAgentGuard() {
 		success.Println("  ✔ AGENTS.md already contains active Razify policy")
 	}
 
-	// 3. Install standard git pre-commit hook if not installed
+	// 3. Install native agent deny files (.cursorignore, .claudeignore, .aiderignore)
+	ignoreFiles, err := mcp.EnsureAgentIgnoreFiles(repoRoot)
+	if err != nil {
+		errColor.Printf("  ✘ Failed to create agent ignore files: %v\n", err)
+	} else if len(ignoreFiles) > 0 {
+		success.Printf("  ✔ Agent ignore files configured: %s\n", strings.Join(ignoreFiles, ", "))
+	} else {
+		success.Println("  ✔ Agent ignore files already protect .env")
+	}
+
+	// 4. Install standard git pre-commit hook if not installed
 	hookPath, err := getHookPath()
 	if err == nil {
 		if _, err := os.Stat(hookPath); os.IsNotExist(err) {
 			_ = os.WriteFile(hookPath, []byte(hookScript), 0755)
-			success.Println("  ✔ Git pre-commit integrity hook installed")
+			success.Println("  ✔ Git pre-commit integrity hook installed (runs 'razify check --quiet')")
 		}
 	}
 
@@ -294,6 +376,11 @@ func uninstallAgentGuard() {
 		success.Println("  ✔ AGENTS.md policy removed successfully.")
 	} else {
 		color.Yellow("  ⚠ Razify policy was not found in AGENTS.md.\n")
+	}
+
+	cleanedIgnores, _ := mcp.RemoveAgentIgnoreFiles(repoRoot)
+	if len(cleanedIgnores) > 0 {
+		success.Printf("  ✔ Removed agent ignore files: %s\n", strings.Join(cleanedIgnores, ", "))
 	}
 	fmt.Println()
 }

@@ -188,6 +188,70 @@ func UninstallAgentPolicy(repoRoot string) (bool, error) {
 	return true, nil
 }
 
+// AgentIgnoreFileList returns the slice of native agent ignore files.
+var AgentIgnoreFileList = []string{".cursorignore", ".claudeignore", ".aiderignore"}
+
+const AgentIgnoreContent = `# Protected by Razify Agent Guard
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+`
+
+// EnsureAgentIgnoreFiles creates or updates .cursorignore, .claudeignore, and .aiderignore.
+func EnsureAgentIgnoreFiles(repoRoot string) ([]string, error) {
+	var createdOrUpdated []string
+	for _, filename := range AgentIgnoreFileList {
+		p := filepath.Join(repoRoot, filename)
+		data, err := os.ReadFile(p)
+		if os.IsNotExist(err) {
+			if err := os.WriteFile(p, []byte(AgentIgnoreContent), 0644); err != nil {
+				return createdOrUpdated, fmt.Errorf("failed to create %s: %w", filename, err)
+			}
+			createdOrUpdated = append(createdOrUpdated, filename)
+			continue
+		} else if err != nil {
+			return createdOrUpdated, fmt.Errorf("failed to read %s: %w", filename, err)
+		}
+
+		content := string(data)
+		if !strings.Contains(content, ".env") {
+			var sb strings.Builder
+			sb.WriteString(content)
+			if !strings.HasSuffix(content, "\n") {
+				sb.WriteString("\n")
+			}
+			sb.WriteString("\n" + AgentIgnoreContent)
+			if err := os.WriteFile(p, []byte(sb.String()), 0644); err != nil {
+				return createdOrUpdated, fmt.Errorf("failed to update %s: %w", filename, err)
+			}
+			createdOrUpdated = append(createdOrUpdated, filename)
+		}
+	}
+	return createdOrUpdated, nil
+}
+
+// RemoveAgentIgnoreFiles removes or cleans up agent ignore files created by Razify.
+func RemoveAgentIgnoreFiles(repoRoot string) ([]string, error) {
+	var removed []string
+	for _, filename := range AgentIgnoreFileList {
+		p := filepath.Join(repoRoot, filename)
+		data, err := os.ReadFile(p)
+		if err != nil {
+			continue
+		}
+
+		content := strings.TrimSpace(string(data))
+		// If the file only contains our ignore content or .env rules, remove it
+		if strings.TrimSpace(content) == strings.TrimSpace(AgentIgnoreContent) {
+			_ = os.Remove(p)
+			removed = append(removed, filename)
+		}
+	}
+	return removed, nil
+}
+
 // SampleMCPConfigCursor returns formatted JSON config for Cursor (.cursor/mcp.json).
 func SampleMCPConfigCursor() string {
 	return `{
