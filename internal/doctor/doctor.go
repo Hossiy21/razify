@@ -494,7 +494,7 @@ func checkToolchains(fs FileSystem, runner ToolchainRunner, fast bool) []CheckRe
 			relevant: hasGo,
 			skipMsg:  "Skipped: not a Go project (no go.mod found)",
 			runProbe: func(ctx context.Context, points int) CheckResult {
-				return probeGo(ctx, runner, points)
+				return probeGo(ctx, runner, fast, points)
 			},
 		},
 		{
@@ -502,7 +502,7 @@ func checkToolchains(fs FileSystem, runner ToolchainRunner, fast bool) []CheckRe
 			relevant: hasNode,
 			skipMsg:  "Skipped: not a Node.js project (no package.json found)",
 			runProbe: func(ctx context.Context, points int) CheckResult {
-				return probeNode(ctx, runner, points)
+				return probeNode(ctx, runner, fast, points)
 			},
 		},
 		{
@@ -510,7 +510,7 @@ func checkToolchains(fs FileSystem, runner ToolchainRunner, fast bool) []CheckRe
 			relevant: hasPython,
 			skipMsg:  "Skipped: not a Python project (no requirements.txt/pyproject.toml found)",
 			runProbe: func(ctx context.Context, points int) CheckResult {
-				return probePython(ctx, runner, points)
+				return probePython(ctx, runner, fast, points)
 			},
 		},
 		{
@@ -581,12 +581,27 @@ func checkToolchains(fs FileSystem, runner ToolchainRunner, fast bool) []CheckRe
 	return results
 }
 
-func probeGo(ctx context.Context, runner ToolchainRunner, points int) CheckResult {
+func probeGo(ctx context.Context, runner ToolchainRunner, fast bool, points int) CheckResult {
 	res := CheckResult{
 		ID:        "razify/doctor/toolchain-go",
 		Category:  "toolchain",
 		Name:      "Go Toolchain",
 		MaxPoints: points,
+	}
+
+	if fast {
+		path, err := runner.LookPath("go")
+		if err != nil {
+			res.Status = StatusFailed
+			res.PointsEarned = 0
+			res.Message = "Go compiler (go) not found in PATH"
+			res.Fix = "Install Go 1.25+ from https://go.dev/dl/"
+			return res
+		}
+		res.Status = StatusPassed
+		res.PointsEarned = points
+		res.Message = fmt.Sprintf("Go compiler found at %s (version check skipped in --fast mode)", path)
+		return res
 	}
 
 	out, err := runner.Run(ctx, "go", "version")
@@ -625,12 +640,27 @@ func probeGo(ctx context.Context, runner ToolchainRunner, points int) CheckResul
 	return res
 }
 
-func probeNode(ctx context.Context, runner ToolchainRunner, points int) CheckResult {
+func probeNode(ctx context.Context, runner ToolchainRunner, fast bool, points int) CheckResult {
 	res := CheckResult{
 		ID:        "razify/doctor/toolchain-node",
 		Category:  "toolchain",
 		Name:      "Node.js Runtime",
 		MaxPoints: points,
+	}
+
+	if fast {
+		path, err := runner.LookPath("node")
+		if err != nil {
+			res.Status = StatusWarning
+			res.PointsEarned = 0
+			res.Message = "Node.js (node) not found in PATH"
+			res.Fix = "Install Node.js 18+ from https://nodejs.org/"
+			return res
+		}
+		res.Status = StatusPassed
+		res.PointsEarned = points
+		res.Message = fmt.Sprintf("Node.js runtime found at %s (version check skipped in --fast mode)", path)
+		return res
 	}
 
 	out, err := runner.Run(ctx, "node", "--version")
@@ -649,12 +679,30 @@ func probeNode(ctx context.Context, runner ToolchainRunner, points int) CheckRes
 	return res
 }
 
-func probePython(ctx context.Context, runner ToolchainRunner, points int) CheckResult {
+func probePython(ctx context.Context, runner ToolchainRunner, fast bool, points int) CheckResult {
 	res := CheckResult{
 		ID:        "razify/doctor/toolchain-python",
 		Category:  "toolchain",
 		Name:      "Python Runtime",
 		MaxPoints: points,
+	}
+
+	if fast {
+		path, err := runner.LookPath("python3")
+		if err != nil {
+			path, err = runner.LookPath("python")
+		}
+		if err != nil {
+			res.Status = StatusWarning
+			res.PointsEarned = 0
+			res.Message = "Python interpreter not found in PATH"
+			res.Fix = "Install Python 3 from https://www.python.org/"
+			return res
+		}
+		res.Status = StatusPassed
+		res.PointsEarned = points
+		res.Message = fmt.Sprintf("Python interpreter found at %s (version check skipped in --fast mode)", path)
+		return res
 	}
 
 	out, err := runner.Run(ctx, "python3", "--version")
@@ -684,6 +732,21 @@ func probeDocker(ctx context.Context, runner ToolchainRunner, fast bool, points 
 		MaxPoints: points,
 	}
 
+	if fast {
+		path, err := runner.LookPath("docker")
+		if err != nil {
+			res.Status = StatusWarning
+			res.PointsEarned = 0
+			res.Message = "Docker CLI not found in PATH"
+			res.Fix = "Install Docker from https://docs.docker.com/get-docker/"
+			return res
+		}
+		res.Status = StatusPassed
+		res.PointsEarned = points
+		res.Message = fmt.Sprintf("Docker CLI found at %s (daemon check skipped in --fast mode)", path)
+		return res
+	}
+
 	// 1. Check if Docker CLI binary is installed
 	out, err := runner.Run(ctx, "docker", "--version")
 	if err != nil {
@@ -695,15 +758,7 @@ func probeDocker(ctx context.Context, runner ToolchainRunner, fast bool, points 
 	}
 	cliVersion := strings.TrimSpace(out)
 
-	// 2. In --fast mode, skip the daemon check
-	if fast {
-		res.Status = StatusPassed
-		res.PointsEarned = points
-		res.Message = fmt.Sprintf("%s detected (daemon check skipped in --fast mode)", cliVersion)
-		return res
-	}
-
-	// 3. Probe if Docker daemon is actively responding
+	// 2. Probe if Docker daemon is actively responding
 	daemonOut, daemonErr := runner.Run(ctx, "docker", "info", "--format", "{{.ServerVersion}}")
 	if daemonErr != nil || strings.TrimSpace(daemonOut) == "" {
 		res.Status = StatusWarning
@@ -816,6 +871,9 @@ type serviceEndpoint struct {
 	IsLocal bool
 }
 
+// isLiteralLocalhost checks if host is strictly a loopback address.
+// Note: 0.0.0.0 is deliberately excluded because on Windows connecting to 0.0.0.0
+// fails with WSAEADDRNOTAVAIL (10049) and is not a valid loopback destination.
 func isLiteralLocalhost(host string) bool {
 	h := strings.TrimSpace(host)
 	h = strings.TrimPrefix(h, "[")

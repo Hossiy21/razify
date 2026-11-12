@@ -13,6 +13,7 @@ import (
 // ToolchainRunner inspects available system developer toolchains with timeouts and fixed argv.
 type ToolchainRunner interface {
 	Run(ctx context.Context, name string, args ...string) (string, error)
+	LookPath(file string) (string, error)
 }
 
 // PortChecker verifies whether a declared local TCP port is in use.
@@ -43,6 +44,10 @@ type OSToolchainRunner struct{}
 func (r *OSToolchainRunner) Run(ctx context.Context, name string, args ...string) (string, error) {
 	out, err := exec.CommandContext(ctx, name, args...).Output()
 	return string(out), err
+}
+
+func (r *OSToolchainRunner) LookPath(file string) (string, error) {
+	return exec.LookPath(file)
 }
 
 // NetPortChecker tests 127.0.0.1 only (preventing Windows firewall alerts).

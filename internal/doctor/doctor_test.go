@@ -29,8 +29,9 @@ func (m *mockFS) ReadFile(path string) ([]byte, error) {
 }
 
 type mockRunner struct {
-	outputs map[string]string
-	errs    map[string]error
+	outputs   map[string]string
+	errs      map[string]error
+	lookPaths map[string]string
 }
 
 func (m *mockRunner) Run(ctx context.Context, name string, args ...string) (string, error) {
@@ -42,6 +43,16 @@ func (m *mockRunner) Run(ctx context.Context, name string, args ...string) (stri
 		return out, nil
 	}
 	return "", fmt.Errorf("command not mocked: %s", cmdKey)
+}
+
+func (m *mockRunner) LookPath(file string) (string, error) {
+	if err, ok := m.errs["lookpath "+file]; ok {
+		return "", err
+	}
+	if p, ok := m.lookPaths[file]; ok {
+		return p, nil
+	}
+	return "/usr/bin/" + file, nil
 }
 
 type mockPortChecker struct {
@@ -356,6 +367,33 @@ MONGO_URI=mongodb://127.0.0.1:27017/db
 	// Running concurrently, all 3 complete in ~100-150ms.
 	if duration > 250*time.Millisecond {
 		t.Errorf("expected concurrent probes to complete in ~100ms, took %v", duration)
+	}
+}
+
+func TestDoctor_FastMode_LookPathOnly(t *testing.T) {
+	deps, fs, runner, _, _, _ := defaultHealthyDeps()
+	fs.files["package.json"] = []byte(`{"name": "test"}`)
+	fs.files["requirements.txt"] = []byte("requests==2.0.0\n")
+	fs.files["Dockerfile"] = []byte("FROM alpine\n")
+
+	// Disallow any runner.Run calls: if any subprocess is invoked, it will fail
+	runner.errs["go version"] = errors.New("subprocess execution disallowed in fast mode")
+	runner.errs["node --version"] = errors.New("subprocess execution disallowed in fast mode")
+	runner.errs["python3 --version"] = errors.New("subprocess execution disallowed in fast mode")
+	runner.errs["docker --version"] = errors.New("subprocess execution disallowed in fast mode")
+
+	report := RunDoctor(DoctorOptions{Fast: true}, deps)
+
+	// All 4 toolchains must pass purely via LookPath
+	for _, c := range report.Checks {
+		if strings.HasPrefix(c.ID, "razify/doctor/toolchain-") {
+			if c.Status != StatusPassed {
+				t.Errorf("expected toolchain check %s to pass via LookPath in fast mode, got status %s: %s", c.ID, c.Status, c.Message)
+			}
+			if !strings.Contains(c.Message, "version check skipped in --fast mode") && !strings.Contains(c.Message, "daemon check skipped") {
+				t.Errorf("expected fast-mode skipped message for %s, got: %s", c.ID, c.Message)
+			}
+		}
 	}
 }
 

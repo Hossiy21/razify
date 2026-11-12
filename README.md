@@ -162,19 +162,31 @@ razify doctor --probe-remote
 
 | Category | Diagnostic Check | Max Pts | Passing Condition |
 |---|---|---|---|
-| **Git / Files (35%)** | Gitignore Leak Guard | **15** | `.gitignore` shields `.env` from accidental commits |
+| **Git / Files (35%)** | Gitignore Leak Guard | **15** | `.gitignore` shields `.env` and file is not tracked in git index (`git ls-files`) |
 | | `.env` Present | **10** | Target environment file exists |
 | | `.env.example` Present | **10** | Schema template exists for team drift alignment |
 | **Schema & Secrets (35%)** | Secret Leak Scan | **15** | Zero high-confidence credentials or secrets in `.env` |
 | | Required Variables | **12** | All `@required` variables defined in `.env` |
 | | Schema Constraints | **8** | Values satisfy `@type`, `@enum`, `@range` constraints |
-| **Toolchains (15%)** | Go Compiler | **5** | Go 1.25+ detected in system PATH |
-| | Node.js Runtime | **5** | Node.js runtime detected in system PATH |
-| | Docker Engine | **5** | Docker CLI and daemon responsive |
-| **Network & Services (15%)** | Port Conflict Check | **8** | All declared application ports are free to bind |
-| | Database Probes | **7** | Declared databases/services respond to TCP connect |
+| **Toolchains (15%)** | Relevant Project Toolchains | **15** | Go, Node.js, Python, or Docker detected in system PATH |
+| **Network & Services (15%)** | Port Conflict Check | **8** | Declared application ports are free to bind on 127.0.0.1 (warnings only if occupied) |
+| | Database Probes | **7** | Declared databases/services respond to TCP connect (localhost only by default) |
 
-Every warning or failure provides a single copy-pasteable **Remediation Command** (e.g. `echo ".env" >> .gitignore`, `lsof -ti :3000 | xargs kill -9`, `docker compose up -d`).
+#### Dynamic Toolchain Point Redistribution
+Toolchains are dynamically evaluated according to detected project manifests:
+- **Go**: scored when `go.mod` exists.
+- **Node.js**: scored when `package.json` exists.
+- **Python**: scored when `requirements.txt`, `pyproject.toml`, or `Pipfile` exists.
+- **Docker**: scored when `Dockerfile`, `compose.yaml`, or `docker-compose.yml` exists.
+
+The 15 toolchain points are distributed equally across relevant manifests (e.g. 15 pts for a standalone Go project, 7/8 pts for a Go + Docker project). Irrelevant toolchains are marked `SKIPPED` with `0` max points and never penalize your score. If no manifests are detected, Go is evaluated by default.
+
+#### Fast Mode & Score Thresholds
+- `--fast`: Skips network and database probes entirely (0 max points assigned so health percentage is calculated purely on static checks). Replaces toolchain version subprocess invocations with `exec.LookPath`-only binary lookups, executing in sub-10ms.
+- `--min-score N`: Configurable threshold (default `90`). If `health_score < min-score`, doctor reports `DEGRADED` or `UNHEALTHY` and exits with code `1`.
+- `--probe-remote`: Permits TCP connect probes against non-loopback endpoints. By default, only literal loopback hosts (`localhost`, `127.0.0.1`, `::1`) are probed without DNS lookups.
+
+Every warning or failure provides a single copy-pasteable **Remediation Command** (e.g. `echo ".env" >> .gitignore`, `git rm --cached .env`, `docker compose up -d`).
 
 ---
 
