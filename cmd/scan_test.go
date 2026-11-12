@@ -81,3 +81,37 @@ func TestMaskValue(t *testing.T) {
 		}
 	}
 }
+
+func TestRunScan_ShannonEntropyLiveScan(t *testing.T) {
+	// Key that matches no regex patterns, but contains a high-entropy secret string
+	content := "CUSTOM_PAYLOAD=xK9mQ4vL2pW8zN7bT1jR5aC3dE6gH0yU\nNORMAL_DATA=aaaaaaaaaaaaaaaaaaaaaaaaa\n"
+	tmpfile, err := os.CreateTemp("", "scan_entropy_test.env")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(tmpfile.Name())
+
+	if _, err := tmpfile.Write([]byte(content)); err != nil {
+		t.Fatal(err)
+	}
+	_ = tmpfile.Close()
+
+	results, err := RunScan(tmpfile.Name())
+	if err != nil {
+		t.Fatalf("RunScan failed: %v", err)
+	}
+
+	foundEntropy := false
+	for _, r := range results {
+		if r.Key == "CUSTOM_PAYLOAD" {
+			foundEntropy = true
+		}
+		if r.Key == "NORMAL_DATA" {
+			t.Errorf("NORMAL_DATA unexpectedly flagged: %+v", r)
+		}
+	}
+
+	if !foundEntropy {
+		t.Fatalf("ShannonEntropy failed to flag CUSTOM_PAYLOAD in live RunScan! Results: %+v", results)
+	}
+}

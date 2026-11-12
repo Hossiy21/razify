@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/Hossiy21/razify/internal/schema"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
@@ -138,7 +139,7 @@ var fixCmd = &cobra.Command{
 
 func RunFix(envFile, exampleFile string, dryRun, noBackup bool) (int, string, error) {
 	// 1. Get existing keys in .env
-	envVars, err := parseEnvFile(envFile)
+	envVars, err := schema.ParseEnvFile(envFile)
 	if err != nil && !os.IsNotExist(err) {
 		return 0, "", err
 	}
@@ -147,13 +148,13 @@ func RunFix(envFile, exampleFile string, dryRun, noBackup bool) (int, string, er
 	}
 
 	// 2. Get keys from example
-	exampleVars, err := ParseEnvWithMetadata(exampleFile)
+	exampleVars, err := schema.ParseEnvWithMetadata(exampleFile)
 	if err != nil {
 		return 0, "", err
 	}
 
 	// 3. Find missing keys
-	var toAdd []EnvVar
+	var toAdd []schema.EnvVar
 	for _, ev := range exampleVars {
 		if _, exists := envVars[ev.Key]; !exists {
 			toAdd = append(toAdd, ev)

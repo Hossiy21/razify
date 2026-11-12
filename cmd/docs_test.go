@@ -3,10 +3,12 @@ package cmd
 import (
 	"strings"
 	"testing"
+
+	"github.com/Hossiy21/razify/internal/schema"
 )
 
 func TestBuildMarkdown(t *testing.T) {
-	vars := []EnvVar{
+	vars := []schema.EnvVar{
 		{
 			Key:      "DB_HOST",
 			Value:    "localhost",

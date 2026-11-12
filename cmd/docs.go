@@ -44,7 +44,7 @@ var docsCmd = &cobra.Command{
 	},
 }
 
-func buildMarkdown(vars []EnvVar, sourceFile string) string {
+func buildMarkdown(vars []schema.EnvVar, sourceFile string) string {
 	var sb strings.Builder
 
 	sb.WriteString("# Environment Variables\n\n")
