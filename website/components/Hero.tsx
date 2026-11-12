@@ -32,7 +32,7 @@ export default function Hero() {
           marginBottom: '28px'
         }}>
           <Sparkles size={16} />
-          Razify v1.0.1 is Live on npm Registry
+          Razify v2.0 is Live — Agent-Safe Configuration & Execution
         </div>
 
         {/* Main Headline */}
@@ -56,7 +56,7 @@ export default function Hero() {
           fontWeight: 400,
           lineHeight: 1.6
         }}>
-          Type-safe validation, schema enforcement, secret leak scanning, and instant IDE diagnostics. Sub-10ms performance. Offline-first. Zero cloud dependency.
+          The unified configuration integrity engine for developers and autonomous AI coding agents. Sub-10ms validation, containerized sandboxing, secret shielding, and Model Context Protocol (MCP) diagnostics.
         </p>
 
         {/* Terminal Copy Badge */}

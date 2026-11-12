@@ -8,7 +8,7 @@ const os = require("os");
 const https = require("https");
 const crypto = require("crypto");
 
-const VERSION = "v0.1.0";
+const VERSION = "v2.0.0";
 const REPO = "Hossiy21/razify";
 const MAX_REDIRECTS = 5;
 const MAX_RETRIES = 3;

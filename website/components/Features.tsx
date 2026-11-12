@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Zap, Shield, FileCheck, Terminal, Code, GitPullRequest } from 'lucide-react';
+import { Zap, Shield, FileCheck, Terminal, Code, GitPullRequest, Lock, Cpu, Sparkles } from 'lucide-react';
 
 const features = [
   {
@@ -10,7 +10,22 @@ const features = [
     description: "Compiled native Go binary engine. Zero startup interpreter latency, fast enough for every git commit and build loop."
   },
   {
-    icon: <Shield color="var(--accent-cyan)" size={28} />,
+    icon: <Lock color="var(--accent-cyan)" size={28} />,
+    title: "Agent-Safe Sandbox Execution",
+    description: "Contain commands inside unprivileged OCI containers ('razify run --sandbox') with synthetic fake secrets, read-only workspaces, and network isolation."
+  },
+  {
+    icon: <Cpu color="var(--accent-purple)" size={28} />,
+    title: "Model Context Protocol (MCP)",
+    description: "Lightweight JSON-RPC 2.0 stdio server ('razify mcp') providing safe schema inspection for Cursor, Claude Desktop, Antigravity, and Gemini CLI."
+  },
+  {
+    icon: <Sparkles color="var(--accent-emerald)" size={28} />,
+    title: "AST Source Code Auto-Discovery",
+    description: "Analyze Go, TS/JS, and Python codebases with 'razify init --from-code' to extract environment variables and bootstrap typed templates."
+  },
+  {
+    icon: <Shield color="var(--accent-rose)" size={28} />,
     title: "Secret Leak Scanning",
     description: "High-entropy analysis and pattern matchers to block exposed API keys, passwords, and JWTs before they reach version control."
   },
