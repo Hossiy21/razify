@@ -33,6 +33,16 @@ archives:
 checksum:
   name_template: 'checksums.txt'
 
+signs:
+  - artifacts: checksum
+    args:
+      - "--batch"
+      - "sign-blob"
+      - "--output-signature=${signature}"
+      - "--output-certificate=${certificate}"
+      - "${artifact}"
+      - "--yes"
+
 snapshot:
   version_template: "{{ .Tag }}-next"
 
