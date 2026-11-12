@@ -25,19 +25,19 @@ func acquireFileLock(filename string, maxRetries int) error {
 			return nil
 		}
 
-		// Check if lock file is stale (older than 30 seconds)
-		if os.IsExist(err) {
+		// Check if lock file is held by another process (exists or permission denied during concurrent open on Windows)
+		if os.IsExist(err) || os.IsPermission(err) {
 			if info, err := os.Stat(lockFile); err == nil {
 				if time.Since(info.ModTime()) > 30*time.Second {
 					// Lock is stale, remove it
-					os.Remove(lockFile)
+					_ = os.Remove(lockFile)
 					retries = 0
 					continue
 				}
 			}
 			retries++
 			if retries < maxRetries {
-				time.Sleep(100 * time.Millisecond)
+				time.Sleep(50 * time.Millisecond)
 			}
 			continue
 		}
@@ -166,7 +166,7 @@ func RunFix(envFile, exampleFile string, dryRun, noBackup bool) (int, string, er
 	}
 
 	// 4. Acquire file lock to prevent concurrent modifications
-	if err := acquireFileLock(envFile, 5); err != nil {
+	if err := acquireFileLock(envFile, 15); err != nil {
 		return 0, "", fmt.Errorf("cannot acquire lock on %s: %v", envFile, err)
 	}
 	defer releaseFileLock(envFile)
