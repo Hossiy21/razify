@@ -111,18 +111,18 @@ func HandleSchemaInspect(argsRaw json.RawMessage, workspaceDir string) (CallTool
 		_ = json.Unmarshal(argsRaw, &args)
 	}
 
-	exampleFile := args.ExampleFile
-	if exampleFile == "" {
-		exampleFile = ".env.example"
-	}
-	if workspaceDir != "" && !filepath.IsAbs(exampleFile) {
-		exampleFile = filepath.Join(workspaceDir, exampleFile)
+	exampleFile, err := ResolveConfinedPath(workspaceDir, args.ExampleFile, ".env.example")
+	if err != nil {
+		return CallToolResult{
+			Content: []ToolContent{{Type: "text", Text: fmt.Sprintf("Error: %v", err)}},
+			IsError: true,
+		}, nil
 	}
 
 	vars, err := schema.ParseEnvWithMetadata(exampleFile)
 	if err != nil {
 		return CallToolResult{
-			Content: []ToolContent{{Type: "text", Text: fmt.Sprintf("Error reading schema file %s: %v", exampleFile, err)}},
+			Content: []ToolContent{{Type: "text", Text: fmt.Sprintf("Error reading schema file %s: %s", filepath.Base(exampleFile), SanitizeParseError(err))}},
 			IsError: true,
 		}, nil
 	}
@@ -135,14 +135,9 @@ func HandleSchemaInspect(argsRaw json.RawMessage, workspaceDir string) (CallTool
 		}
 
 		placeholder := v.Value
-		// If placeholder looks like a real secret, redact it
-		if len(placeholder) > 0 {
-			for _, r := range scanner.SecretValuePatterns {
-				if r.Pattern.MatchString(placeholder) {
-					placeholder = "[REDACTED_SECRET_PLACEHOLDER]"
-					break
-				}
-			}
+		// If placeholder looks like a real or synthetic secret, redact it
+		if IsSecretPlaceholder(v.Key, placeholder, v.Tags) {
+			placeholder = "[REDACTED_SECRET_PLACEHOLDER]"
 		}
 
 		items = append(items, SchemaItem{
@@ -198,18 +193,18 @@ func HandleEnvValidateConfig(argsRaw json.RawMessage, workspaceDir string) (Call
 		}, nil
 	}
 
-	exampleFile := args.ExampleFile
-	if exampleFile == "" {
-		exampleFile = ".env.example"
-	}
-	if workspaceDir != "" && !filepath.IsAbs(exampleFile) {
-		exampleFile = filepath.Join(workspaceDir, exampleFile)
+	exampleFile, err := ResolveConfinedPath(workspaceDir, args.ExampleFile, ".env.example")
+	if err != nil {
+		return CallToolResult{
+			Content: []ToolContent{{Type: "text", Text: fmt.Sprintf("Error: %v", err)}},
+			IsError: true,
+		}, nil
 	}
 
 	exampleVars, err := schema.ParseEnvWithMetadata(exampleFile)
 	if err != nil {
 		return CallToolResult{
-			Content: []ToolContent{{Type: "text", Text: fmt.Sprintf("Error reading schema file %s: %v", exampleFile, err)}},
+			Content: []ToolContent{{Type: "text", Text: fmt.Sprintf("Error reading schema file %s: %s", filepath.Base(exampleFile), SanitizeParseError(err))}},
 			IsError: true,
 		}, nil
 	}
@@ -292,25 +287,26 @@ func HandleEnvDiffKeys(argsRaw json.RawMessage, workspaceDir string) (CallToolRe
 	}
 
 	envFile := args.EnvFile
-	if envFile == "" {
-		envFile = ".env"
-	}
-	if workspaceDir != "" && !filepath.IsAbs(envFile) {
-		envFile = filepath.Join(workspaceDir, envFile)
+	envFile, err := ResolveConfinedPath(workspaceDir, args.EnvFile, ".env")
+	if err != nil {
+		return CallToolResult{
+			Content: []ToolContent{{Type: "text", Text: fmt.Sprintf("Error: %v", err)}},
+			IsError: true,
+		}, nil
 	}
 
-	exampleFile := args.ExampleFile
-	if exampleFile == "" {
-		exampleFile = ".env.example"
-	}
-	if workspaceDir != "" && !filepath.IsAbs(exampleFile) {
-		exampleFile = filepath.Join(workspaceDir, exampleFile)
+	exampleFile, err := ResolveConfinedPath(workspaceDir, args.ExampleFile, ".env.example")
+	if err != nil {
+		return CallToolResult{
+			Content: []ToolContent{{Type: "text", Text: fmt.Sprintf("Error: %v", err)}},
+			IsError: true,
+		}, nil
 	}
 
 	envMap, err := schema.ParseEnvFile(envFile)
 	if err != nil && !os.IsNotExist(err) {
 		return CallToolResult{
-			Content: []ToolContent{{Type: "text", Text: fmt.Sprintf("Error reading env file %s: %v", envFile, err)}},
+			Content: []ToolContent{{Type: "text", Text: fmt.Sprintf("Error reading env file %s: %s", filepath.Base(envFile), SanitizeParseError(err))}},
 			IsError: true,
 		}, nil
 	}
@@ -318,7 +314,7 @@ func HandleEnvDiffKeys(argsRaw json.RawMessage, workspaceDir string) (CallToolRe
 	exampleVars, err := schema.ParseEnvWithMetadata(exampleFile)
 	if err != nil {
 		return CallToolResult{
-			Content: []ToolContent{{Type: "text", Text: fmt.Sprintf("Error reading schema file %s: %v", exampleFile, err)}},
+			Content: []ToolContent{{Type: "text", Text: fmt.Sprintf("Error reading schema file %s: %s", filepath.Base(exampleFile), SanitizeParseError(err))}},
 			IsError: true,
 		}, nil
 	}
@@ -390,20 +386,20 @@ func HandleEnvHealthAudit(argsRaw json.RawMessage, workspaceDir string) (CallToo
 		_ = json.Unmarshal(argsRaw, &args)
 	}
 
-	envFile := args.EnvFile
-	if envFile == "" {
-		envFile = ".env"
-	}
-	if workspaceDir != "" && !filepath.IsAbs(envFile) {
-		envFile = filepath.Join(workspaceDir, envFile)
+	envFile, err := ResolveConfinedPath(workspaceDir, args.EnvFile, ".env")
+	if err != nil {
+		return CallToolResult{
+			Content: []ToolContent{{Type: "text", Text: fmt.Sprintf("Error: %v", err)}},
+			IsError: true,
+		}, nil
 	}
 
-	exampleFile := args.ExampleFile
-	if exampleFile == "" {
-		exampleFile = ".env.example"
-	}
-	if workspaceDir != "" && !filepath.IsAbs(exampleFile) {
-		exampleFile = filepath.Join(workspaceDir, exampleFile)
+	exampleFile, err := ResolveConfinedPath(workspaceDir, args.ExampleFile, ".env.example")
+	if err != nil {
+		return CallToolResult{
+			Content: []ToolContent{{Type: "text", Text: fmt.Sprintf("Error: %v", err)}},
+			IsError: true,
+		}, nil
 	}
 
 	envMap, _ := schema.ParseEnvFile(envFile)
