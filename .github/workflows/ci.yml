@@ -28,3 +28,7 @@ jobs:
 
       - name: Test
         run: go test -v ./...
+
+      - name: Docker Integration Tests (Linux only)
+        if: runner.os == 'Linux'
+        run: go test -v -tags docker ./internal/sandbox/...

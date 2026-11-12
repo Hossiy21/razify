@@ -5,7 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - Phase 2: razify doctor Diagnostic Command
+## [Unreleased] - Phase 3: Agent-Safe Sandbox Execution (`razify run --sandbox`)
+
+### Added
+- **`razify run --sandbox` Command:** Isolated command execution inside unprivileged OCI containers tailored for AI coding agents and developer workflows:
+  - **Synthetic Fake Secrets (`--fake-secrets`):** Default posture substitutes real credentials with deterministic synthetic values (`razify_fake_<type>_<hash>`) conforming to schema definitions, shielding secrets from agent context windows, terminal logs, and process memory.
+  - **Process Table Argument Protection:** Environment variables are passed via Docker CLI process environments (`-e KEY`), completely avoiding command-line argument exposure in host process tables (`ps aux`).
+  - **Network Containment (`--network none`):** Strict loopback-only isolation by default, mitigating data exfiltration and unauthorized external telemetry.
+  - **Read-Only Workspace & .git Protection:** Mounts host workspace as `:ro` by default; keeps `.git` read-only even under `--read-write` to mitigate tampering with `.git/hooks` and CI workflows.
+  - **`.env*` File Masking:** Automatically discovers and masks `.env` and `.env.*` files by bind-mounting an empty file over them inside the container.
+  - **Compiler-Ready Writable Caches:** Provides an exec-capable scratch tmpfs (`/tmp:rw,exec,nosuid,size=512m`) and project profile cache mappings for Go (`GOCACHE`, `GOMODCACHE`), Node (`npm_config_cache`), and Python (`PYTHONPYCACHEPREFIX`, `PIP_CACHE_DIR`).
+  - **Streaming Secret Masking:** Real-time stream redaction on `stdout` and `stderr` for known secrets, base64 variants, and URL-encoded variants.
+  - **Strict Guardrail Rejections:** Hard exit (code 2) on dangerous flags (`--privileged`, Docker socket mounts, `--network host`, `--pid=host`, `seccomp=unconfined`).
+  - **Dry-Run Mode & Golden Tests:** `--dry-run` flag prints exact generated docker argv without execution, backed by golden tests.
+  - **Benchmark Suite:** Added `BenchmarkProcessEnvForSandbox` (~9.9 µs), `BenchmarkBuildDockerArgs` (~21.2 µs), and `BenchmarkStreamMasker` (~11.5 µs).
+- **Concurrency Hardening in `cmd/fix.go`:** Enhanced lock acquisition failure messages to explicitly name the held lock file and provide the safe-to-delete remediation advice when no razify process is running.
+
+## [0.3.0] - Phase 2: razify doctor Diagnostic Command
 
 ### Added
 - **`razify doctor` Diagnostic Command:** Comprehensive, offline-first health check examining developer toolchains, environment integrity, port allocations, and service availability:

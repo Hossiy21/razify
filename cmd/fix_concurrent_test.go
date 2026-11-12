@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -228,3 +229,36 @@ func TestStaleLocksAreRemoved(t *testing.T) {
 		t.Fatal("Lock file doesn't exist after acquisition")
 	}
 }
+
+// TestLockFailureErrorMessage tests that a failed lock acquisition names the lock file and remediation
+func TestLockFailureErrorMessage(t *testing.T) {
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, ".env")
+	lockFile := testFile + ".lock"
+
+	// Create an active (not stale) lock file
+	f, err := os.Create(lockFile)
+	if err != nil {
+		t.Fatalf("Failed to create lock file: %v", err)
+	}
+	defer f.Close()
+
+	// Touch to ensure fresh timestamp
+	now := time.Now()
+	os.Chtimes(lockFile, now, now)
+
+	// Attempt to acquire lock with 1 retry so it quickly fails
+	err = acquireFileLock(testFile, 1)
+	if err == nil {
+		t.Fatal("Expected acquireFileLock to fail when lock is held, but got nil")
+	}
+
+	errMsg := err.Error()
+	if !strings.Contains(errMsg, lockFile) {
+		t.Errorf("Error message %q does not contain lock file path %q", errMsg, lockFile)
+	}
+	if !strings.Contains(errMsg, "safe to delete if no razify process is running") {
+		t.Errorf("Error message %q does not contain remediation advice", errMsg)
+	}
+}
+

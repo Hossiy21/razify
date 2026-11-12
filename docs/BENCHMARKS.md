@@ -13,11 +13,15 @@ The benchmark suite is executed inside the isolated Docker sandbox via `go test 
 | **Secret Scanning & Entropy** | `BenchmarkScan` | **11.72 µs** (11,719 ns) | 714 B | 9 allocs |
 | **Doctor Fast Mode (In-Memory)** | `BenchmarkDoctor_Fast` | **28.03 µs** (28,030 ns) | 25,741 B | 123 allocs |
 | **Doctor Full Probing (Mocked)** | `BenchmarkDoctor_FullMocked` | **32.08 µs** (32,082 ns) | 27,368 B | 160 allocs |
+| **Sandbox Environment Processing** | `BenchmarkProcessEnvForSandbox` | **9.91 µs** (9,912 ns) | 4,296 B | 65 allocs |
+| **Sandbox Docker Argv Builder** | `BenchmarkBuildDockerArgs` | **21.18 µs** (21,175 ns) | 3,332 B | 36 allocs |
+| **Sandbox Stream Masker** | `BenchmarkStreamMasker` | **11.45 µs** (11,445 ns) | 7,328 B | 65 allocs |
 | **Full Single-Pass Check (with Disk I/O)** | `BenchmarkCheck` | **5.25 ms** (5,247,518 ns) | 17,787 B | 78 allocs |
 
 ### Performance SLA Verification
 - ✅ **Core in-memory validation:** ~1.2 µs (well under 100 µs target).
 - ✅ **Secret pattern & entropy scan:** ~11.7 µs per environment file.
+- ✅ **Sandbox argv generation & stream masking:** ~10–21 µs overhead.
 - ✅ **End-to-End `razify check` with disk I/O:** ~5.2 ms (surpassing the sub-10ms requirement).
 - ✅ **Zero Network Overhead:** Offline-first architecture ensures 0ms network latency.
 
