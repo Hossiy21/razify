@@ -131,17 +131,15 @@ func TestGuard_PreCommitLifecycle_TempGitRepo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("getHookPath failed with core.hooksPath: %v", err)
 	}
-	expectedCustomPath := filepath.Join(tempGitDir, customHooksDir, "pre-commit")
-	evalCustom, _ := filepath.EvalSymlinks(customHookPath)
-	evalExpected, _ := filepath.EvalSymlinks(expectedCustomPath)
-	if evalCustom == "" {
-		evalCustom = filepath.Clean(customHookPath)
+	evalTemp, errEval := filepath.EvalSymlinks(tempGitDir)
+	if errEval != nil || evalTemp == "" {
+		evalTemp = filepath.Clean(tempGitDir)
 	}
-	if evalExpected == "" {
-		evalExpected = filepath.Clean(expectedCustomPath)
-	}
-	if !strings.EqualFold(evalCustom, evalExpected) {
-		t.Fatalf("getHookPath did not honor core.hooksPath! Expected %s, got %s", expectedCustomPath, customHookPath)
+	expectedCustomPath := filepath.Join(evalTemp, customHooksDir, "pre-commit")
+
+	relCustom, errRel := filepath.Rel(evalTemp, customHookPath)
+	if errRel != nil || filepath.Clean(relCustom) != filepath.Clean(filepath.Join(customHooksDir, "pre-commit")) {
+		t.Fatalf("getHookPath did not honor core.hooksPath! Expected %s, got %s (rel: %s)", expectedCustomPath, customHookPath, relCustom)
 	}
 
 	installGuard()
