@@ -62,7 +62,7 @@ Every engineering team loses hours to broken `.env` files:
 | Feature | Command | Description |
 |---|---|---|
 | ⚡ **Unified Integrity Check** | `razify check` | **Flagship**: Single-pass schema validation, type checking & secret leak scanning. |
-| 🩺 **Workspace Doctor** | `razify doctor` | Health checks environment integrity, Go/Node/Docker toolchains, port collisions & DB reachability with deterministic 0-100 scoring. |
+| 🩺 **Workspace Doctor** | `razify doctor` | Health checks environment integrity, Go/Node/Docker toolchains, port collisions & DB reachability (~12ms full, ~sub-10ms with `--fast`). |
 | 🔒 **Secret Leak Scanner** | `razify scan` | High-entropy string detection catching API keys, JWTs, and passwords. |
 | 📋 **Type Schema Engine** | In `.env.example` | Enforces `@type(...)`, `@enum(...)`, `@range(...)`, and `@requires(...)`. |
 | 🎨 **VS Code Extension** | `vscode-razify` | Real-time red/yellow squigglies, hover tooltips & auto-completions. |
@@ -141,13 +141,13 @@ Install the official **`vscode-razify`** extension for Visual Studio Code / Anti
 
 ## 🩺 Workspace & Environment Doctor (`razify doctor`)
 
-`razify doctor` executes an offline-first diagnostic health check of your workspace, evaluating configuration security, developer toolchains, local TCP port conflicts, and database connectivity.
+`razify doctor` executes an offline-first diagnostic health check of your workspace (~12ms full suite), evaluating configuration security, developer toolchains, local TCP port conflicts, and database connectivity.
 
 ```bash
-# Run full diagnostic suite
+# Run full diagnostic suite (~12ms)
 razify doctor
 
-# Fast mode: sub-10ms run skipping network/port probes (ideal for pre-commit hooks)
+# Fast mode: sub-10ms (~6.9ms) run using LookPath and skipping network/port probes (ideal for pre-commit hooks)
 razify doctor --fast
 
 # Output as structured JSON or SARIF v2.1.0
@@ -182,7 +182,7 @@ Toolchains are dynamically evaluated according to detected project manifests:
 The 15 toolchain points are distributed equally across relevant manifests (e.g. 15 pts for a standalone Go project, 7/8 pts for a Go + Docker project). Irrelevant toolchains are marked `SKIPPED` with `0` max points and never penalize your score. If no manifests are detected, Go is evaluated by default.
 
 #### Fast Mode & Score Thresholds
-- `--fast`: Skips network and database probes entirely (0 max points assigned so health percentage is calculated purely on static checks). Replaces toolchain version subprocess invocations with `exec.LookPath`-only binary lookups, executing in sub-10ms.
+- `--fast`: Skips network and database probes entirely (0 max points assigned so health percentage is calculated purely on static checks). Replaces toolchain version subprocess invocations with `exec.LookPath`-only binary lookups, executing in sub-10ms (~6.9ms vs ~12ms for full doctor).
 - `--min-score N`: Configurable threshold (default `90`). If `health_score < min-score`, doctor reports `DEGRADED` or `UNHEALTHY` and exits with code `1`.
 - `--probe-remote`: Permits TCP connect probes against non-loopback endpoints. By default, only literal loopback hosts (`localhost`, `127.0.0.1`, `::1`) are probed without DNS lookups.
 
