@@ -8,7 +8,7 @@ import (
 	"github.com/Hossiy21/razify/internal/reporter"
 	"github.com/Hossiy21/razify/internal/scanner"
 	"github.com/Hossiy21/razify/internal/schema"
-	"github.com/santhosh-tekuri/jsonschema/v5"
+	jsonschema "github.com/santhosh-tekuri/jsonschema/v5"
 )
 
 func TestSarifValidationAgainstOfficialSchema(t *testing.T) {
@@ -91,5 +91,60 @@ func TestSarifCleanValidationAgainstOfficialSchema(t *testing.T) {
 
 	if err := sch.Validate(rawDoc); err != nil {
 		t.Fatalf("Clean SARIF output failed official v2.1.0 JSON schema validation:\n%v\nGenerated SARIF:\n%s", err, sarifJSON)
+	}
+}
+
+func TestDoctorSarifValidationAgainstOfficialSchema(t *testing.T) {
+	schemaPath := filepath.Join("..", "..", "testdata", "sarif-schema-2.1.0.json")
+	compiler := jsonschema.NewCompiler()
+	compiler.Draft = jsonschema.Draft7
+
+	sch, err := compiler.Compile(schemaPath)
+	if err != nil {
+		t.Fatalf("failed to compile official SARIF v2.1.0 JSON schema: %v", err)
+	}
+
+	res := reporter.Result{
+		TargetFile:   ".env",
+		TemplateFile: ".env.example",
+		Status:       "FAILED",
+		Diagnostics: []reporter.Diagnostic{
+			{
+				RuleID:   "razify/doctor/missing-env",
+				Message:  "Environment file .env does not exist",
+				Severity: reporter.SeverityError,
+				File:     ".env",
+				Line:     1,
+			},
+			{
+				RuleID:   "razify/doctor/port-conflict",
+				Message:  "Port conflict on 8080",
+				Severity: reporter.SeverityError,
+				File:     ".env",
+				Line:     1,
+			},
+			{
+				RuleID:   "razify/doctor/toolchain-node",
+				Message:  "Node.js not found",
+				Severity: reporter.SeverityWarning,
+				File:     "",
+				Line:     1,
+			},
+		},
+		RemediationSteps: []string{"cp .env.example .env", "lsof -ti :8080 | xargs kill -9"},
+	}
+
+	sarifJSON, err := reporter.RenderSarif(res, "v0.2.0")
+	if err != nil {
+		t.Fatalf("RenderSarif failed: %v", err)
+	}
+
+	var rawDoc interface{}
+	if err := json.Unmarshal([]byte(sarifJSON), &rawDoc); err != nil {
+		t.Fatalf("failed to unmarshal generated SARIF: %v", err)
+	}
+
+	if err := sch.Validate(rawDoc); err != nil {
+		t.Fatalf("Doctor SARIF output failed official v2.1.0 JSON schema validation:\n%v\nGenerated SARIF:\n%s", err, sarifJSON)
 	}
 }

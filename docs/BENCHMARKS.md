@@ -11,6 +11,8 @@ The benchmark suite is executed inside the isolated Docker sandbox via `go test 
 | **Schema Validation** | `BenchmarkValidate` | **1.22 µs** (1,223 ns) | 418 B | 5 allocs |
 | **SARIF Serialization** | `BenchmarkSarifRender` | **9.80 µs** (9,803 ns) | 8,327 B | 10 allocs |
 | **Secret Scanning & Entropy** | `BenchmarkScan` | **11.72 µs** (11,719 ns) | 714 B | 9 allocs |
+| **Doctor Fast Mode (In-Memory)** | `BenchmarkDoctor_Fast` | **28.03 µs** (28,030 ns) | 25,741 B | 123 allocs |
+| **Doctor Full Probing (Mocked)** | `BenchmarkDoctor_FullMocked` | **32.08 µs** (32,082 ns) | 27,368 B | 160 allocs |
 | **Full Single-Pass Check (with Disk I/O)** | `BenchmarkCheck` | **5.25 ms** (5,247,518 ns) | 17,787 B | 78 allocs |
 
 ### Performance SLA Verification

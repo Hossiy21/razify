@@ -62,6 +62,7 @@ Every engineering team loses hours to broken `.env` files:
 | Feature | Command | Description |
 |---|---|---|
 | ⚡ **Unified Integrity Check** | `razify check` | **Flagship**: Single-pass schema validation, type checking & secret leak scanning. |
+| 🩺 **Workspace Doctor** | `razify doctor` | Health checks environment integrity, Go/Node/Docker toolchains, port collisions & DB reachability with deterministic 0-100 scoring. |
 | 🔒 **Secret Leak Scanner** | `razify scan` | High-entropy string detection catching API keys, JWTs, and passwords. |
 | 📋 **Type Schema Engine** | In `.env.example` | Enforces `@type(...)`, `@enum(...)`, `@range(...)`, and `@requires(...)`. |
 | 🎨 **VS Code Extension** | `vscode-razify` | Real-time red/yellow squigglies, hover tooltips & auto-completions. |
@@ -135,6 +136,45 @@ Install the official **`vscode-razify`** extension for Visual Studio Code / Anti
 * 💡 **Schema Hover Tooltips**: View `@type(...)` and `@enum(...)` schema rules on mouse hover.
 * ⚡ **Auto-Completion**: Suggests missing `.env.example` keys while typing.
 * 🛡️ **Check on Save**: Auto-runs background checks whenever a `.env` file is saved.
+
+---
+
+## 🩺 Workspace & Environment Doctor (`razify doctor`)
+
+`razify doctor` executes an offline-first diagnostic health check of your workspace, evaluating configuration security, developer toolchains, local TCP port conflicts, and database connectivity.
+
+```bash
+# Run full diagnostic suite
+razify doctor
+
+# Fast mode: sub-10ms run skipping network/port probes (ideal for pre-commit hooks)
+razify doctor --fast
+
+# Output as structured JSON or SARIF v2.1.0
+razify doctor --json
+razify doctor --sarif
+
+# Probe remote (non-localhost) database and cache endpoints
+razify doctor --probe-remote
+```
+
+### Deterministic Health Score Weights (0–100)
+
+| Category | Diagnostic Check | Max Pts | Passing Condition |
+|---|---|---|---|
+| **Git / Files (35%)** | Gitignore Leak Guard | **15** | `.gitignore` shields `.env` from accidental commits |
+| | `.env` Present | **10** | Target environment file exists |
+| | `.env.example` Present | **10** | Schema template exists for team drift alignment |
+| **Schema & Secrets (35%)** | Secret Leak Scan | **15** | Zero high-confidence credentials or secrets in `.env` |
+| | Required Variables | **12** | All `@required` variables defined in `.env` |
+| | Schema Constraints | **8** | Values satisfy `@type`, `@enum`, `@range` constraints |
+| **Toolchains (15%)** | Go Compiler | **5** | Go 1.25+ detected in system PATH |
+| | Node.js Runtime | **5** | Node.js runtime detected in system PATH |
+| | Docker Engine | **5** | Docker CLI and daemon responsive |
+| **Network & Services (15%)** | Port Conflict Check | **8** | All declared application ports are free to bind |
+| | Database Probes | **7** | Declared databases/services respond to TCP connect |
+
+Every warning or failure provides a single copy-pasteable **Remediation Command** (e.g. `echo ".env" >> .gitignore`, `lsof -ti :3000 | xargs kill -9`, `docker compose up -d`).
 
 ---
 

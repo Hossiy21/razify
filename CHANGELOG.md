@@ -5,7 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - Phase 1: Architecture Foundation & SARIF
+## [Unreleased] - Phase 2: razify doctor Diagnostic Command
+
+### Added
+- **`razify doctor` Diagnostic Command:** Comprehensive, offline-first health check examining developer toolchains, environment integrity, port allocations, and service availability:
+  - **Deterministic Health Score (0-100):** Weighted scoring system across Git/Files (35 pts), Schema/Secrets (35 pts), Toolchains (15 pts), and Ports/Services (15 pts).
+  - **Port Conflict Probes:** Native Go cross-platform `net.Listen` checks for all declared application ports (`PORT`, `*_PORT`), detecting occupied ports without parsing `netstat`/`ss`.
+  - **Read-Only Database & Service Probes:** Auth-less, 300ms TCP-connect probes against declared database/cache endpoints (`postgres`, `redis`, `mysql`, `mongo`).
+  - **Credential Safety:** Automatic credential masking ensures database passwords and user tokens are never displayed in CLI output, logs, or SARIF results.
+  - **Remote Service Isolation:** Remote (non-localhost) database endpoints are safely skipped by default unless `--probe-remote` is explicitly provided.
+  - **Fast Execution Mode (`--fast`):** Bypasses network and service probes for ultra-fast (sub-10ms) health evaluation during pre-commit hooks and CI runs.
+  - **Actionable Fixes:** Provides concrete, copy-pasteable remediation commands for every warning or failing diagnostic check.
+  - **Unified Contract Integration:** Full support for `--json`, `--sarif` (OASIS v2.1.0 schema-validated), and standard `0`/`1`/`2` exit codes.
+  - **Modular Architecture:** Defined `ToolchainRunner`, `PortChecker`, `ServiceProber`, and `FileSystem` interfaces enabling 100% hermetic, table-driven mock testing in `internal/doctor`.
+  - **Benchmarking Suite:** Added `BenchmarkDoctor_Fast` (~28.0 µs/op) and `BenchmarkDoctor_FullMocked` (~32.1 µs/op).
+
+## [0.2.0] - Phase 1: Architecture Foundation & SARIF
 
 ### Added
 - **Internal Package Architecture:** Decoupled monolithic `cmd/` package into modular `internal/` packages:

@@ -17,6 +17,7 @@ func TestNoNetHttpInCorePackages(t *testing.T) {
 		filepath.Join("..", "internal", "scanner"),
 		filepath.Join("..", "internal", "reporter"),
 		filepath.Join("..", "internal", "sandbox"),
+		filepath.Join("..", "internal", "doctor"),
 	}
 
 	for _, pkgDir := range corePackages {

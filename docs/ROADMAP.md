@@ -157,18 +157,21 @@ razify/
   - Backward compatibility verified with existing test suite and `vscode-extension` mock runs.
   - CHANGELOG entry added.
 
-### Phase 2: `razify doctor` (Environment & Toolchain Diagnostics)
+### Phase 2: `razify doctor` (Environment & Toolchain Diagnostics) [COMPLETED]
 - **Objectives:**
   1. Implement `internal/doctor` to inspect project prerequisites.
   2. Integrity checks: validates `.env` against `.env.example`, verifies `.gitignore` guards `.env`.
   3. Toolchain inspection: validates Go (1.25+), Node.js, and Docker availability and version compliance.
-  4. Port conflict detection: inspects ports specified in `.env` (e.g. `PORT`, `DB_PORT`) against local listening sockets.
-  5. Service detection: verifies local or container availability for database connections (PostgreSQL, MySQL, Redis, MongoDB).
-  6. Terminal output with overall Health Score (0–100) and actionable fix commands for every failure.
+  4. Port conflict detection: inspects declared ports via native `net.Listen` without parsing `netstat`/`ss`.
+  5. Service detection: auth-less, read-only 300ms TCP-connect probes against declared databases (PostgreSQL, MySQL, Redis, MongoDB).
+  6. Credential masking: zero secret leakage in diagnostics, messages, or SARIF output.
+  7. Terminal output with deterministic Health Score (0–100) and actionable fix commands for every failure.
+  8. `--fast` mode skipping network/service probes for sub-10ms runs.
+  9. Unified `--json` and `--sarif` (OASIS v2.1.0 schema-validated) output.
 - **Definition of Done:**
-  - Table-driven unit tests for all diagnostic probes.
-  - Support for `--json` output.
-  - Docker sandbox test suite passing.
+  - Table-driven unit tests for all diagnostic probes passing in Docker sandbox (`golang:1.25-alpine`).
+  - `go vet ./...` and `golangci-lint run ./...` 100% clean (0 issues).
+  - Benchmarks recorded under `docs/BENCHMARKS.md` (`BenchmarkDoctor_Fast`: ~28.0 µs).
   - Documentation and CHANGELOG updated.
 
 ### Phase 3: `razify run --sandbox` (Hardened Container Runtime)

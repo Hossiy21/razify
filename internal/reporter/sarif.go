@@ -108,6 +108,56 @@ var standardRules = []SarifRule{
 		ShortDescription: SarifMultiformatText{Text: "Suspicious high-entropy or token value detected"},
 		FullDescription:  SarifMultiformatText{Text: "A high-entropy string or key matching danger patterns was detected."},
 	},
+	{
+		ID:               "razify/doctor/gitignore-missing",
+		ShortDescription: SarifMultiformatText{Text: "Environment file unshielded in gitignore"},
+		FullDescription:  SarifMultiformatText{Text: "The .env file is not listed in .gitignore and risks being committed to version control."},
+	},
+	{
+		ID:               "razify/doctor/missing-env",
+		ShortDescription: SarifMultiformatText{Text: "Environment file is missing"},
+		FullDescription:  SarifMultiformatText{Text: "The target .env file was not found in the workspace root."},
+	},
+	{
+		ID:               "razify/doctor/missing-example",
+		ShortDescription: SarifMultiformatText{Text: "Schema template file is missing"},
+		FullDescription:  SarifMultiformatText{Text: "The .env.example schema template is missing from the workspace root."},
+	},
+	{
+		ID:               "razify/doctor/missing-required-vars",
+		ShortDescription: SarifMultiformatText{Text: "Required schema variables missing in environment"},
+		FullDescription:  SarifMultiformatText{Text: "One or more variables marked as required by the schema template are absent from the environment."},
+	},
+	{
+		ID:               "razify/doctor/invalid-schema-types",
+		ShortDescription: SarifMultiformatText{Text: "Environment variables violate schema constraints"},
+		FullDescription:  SarifMultiformatText{Text: "Values in the environment file violate type or range constraints defined in the schema template."},
+	},
+	{
+		ID:               "razify/doctor/toolchain-go",
+		ShortDescription: SarifMultiformatText{Text: "Go toolchain version requirement not satisfied"},
+		FullDescription:  SarifMultiformatText{Text: "Go compiler was not found in PATH or version is older than 1.25."},
+	},
+	{
+		ID:               "razify/doctor/toolchain-node",
+		ShortDescription: SarifMultiformatText{Text: "Node.js runtime not found"},
+		FullDescription:  SarifMultiformatText{Text: "Node.js was not detected in PATH."},
+	},
+	{
+		ID:               "razify/doctor/toolchain-docker",
+		ShortDescription: SarifMultiformatText{Text: "Docker engine unavailable"},
+		FullDescription:  SarifMultiformatText{Text: "Docker CLI was not found or the Docker daemon is unreachable."},
+	},
+	{
+		ID:               "razify/doctor/port-conflict",
+		ShortDescription: SarifMultiformatText{Text: "Declared port conflict detected"},
+		FullDescription:  SarifMultiformatText{Text: "A TCP port declared in the environment is already occupied by another local process."},
+	},
+	{
+		ID:               "razify/doctor/service-unreachable",
+		ShortDescription: SarifMultiformatText{Text: "Declared service probe failed"},
+		FullDescription:  SarifMultiformatText{Text: "A database or backend service declared in the environment did not respond to TCP connect."},
+	},
 }
 
 // ToSarif converts a unified Result into a SARIF v2.1.0 document.
