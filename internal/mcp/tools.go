@@ -1,11 +1,9 @@
 package mcp
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -67,7 +65,7 @@ func ListTools() []Tool {
 		},
 		{
 			Name: "env_health_audit",
-			Description: "Perform an audit of environment configuration health (score 0-100, missing keys, and schema violations). Any secret findings have values masked or fingerprinted.",
+			Description: "Perform an audit of environment configuration health (0-100, missing keys, and schema violations). Any secret findings have values masked.",
 			InputSchema: ToolInputSchema{
 				Type: "object",
 				Properties: map[string]PropertyDef{
@@ -136,14 +134,23 @@ func HandleSchemaInspect(argsRaw json.RawMessage, workspaceDir string) (CallTool
 		}
 
 		placeholder := SafeMCPValue(v.Key, v.Value, v.Tags)
+		sanitizedComment := SanitizeMCPText(v.Comment)
+		sanitizedCategory := SanitizeMCPText(v.Category)
+		var sanitizedTags map[string]string
+		if v.Tags != nil {
+			sanitizedTags = make(map[string]string, len(v.Tags))
+			for tk, tv := range v.Tags {
+				sanitizedTags[tk] = SanitizeMCPText(tv)
+			}
+		}
 
 		items = append(items, SchemaItem{
 			Key:         v.Key,
 			Type:        inferredType,
 			Required:    v.Required,
-			Category:    v.Category,
-			Comment:     v.Comment,
-			Tags:        v.Tags,
+			Category:    sanitizedCategory,
+			Comment:     sanitizedComment,
+			Tags:        sanitizedTags,
 			Placeholder: placeholder,
 		})
 	}
@@ -323,7 +330,7 @@ func HandleEnvDiffKeys(argsRaw json.RawMessage, workspaceDir string) (CallToolRe
 				IsError: true,
 			}, nil
 		}
-	} else if !os.IsNotExist(err) && !strings.Contains(err.Error(), "no such file") && !strings.Contains(err.Error(), "does not exist") {
+	} else if !errors.Is(err, ErrNotExist) {
 		return CallToolResult{
 			Content: []ToolContent{{Type: "text", Text: fmt.Sprintf("Error: %v", err)}},
 			IsError: true,
@@ -377,15 +384,15 @@ type HealthAuditSecretFinding struct {
 	Reason      string `json:"reason"`
 	Risk        string `json:"risk"`
 	MaskedValue string `json:"masked_value"`
-	Fingerprint string `json:"fingerprint_sha256"`
 }
 
 type HealthAuditResult struct {
-	HealthScore    int                        `json:"health_score"`
-	Status         string                     `json:"status"` // "HEALTHY", "DEGRADED", "UNHEALTHY"
-	TotalKeys      int                        `json:"total_keys"`
-	MissingKeys    []string                   `json:"missing_keys"`
-	SecretFindings []HealthAuditSecretFinding `json:"secret_findings"`
+	ConfigHealthScore int                        `json:"config_health_score"`
+	HealthScore       int                        `json:"health_score"` // Kept as alias for compatibility
+	Status            string                     `json:"status"`       // "HEALTHY", "DEGRADED", "UNHEALTHY"
+	TotalKeys         int                        `json:"total_keys"`
+	MissingKeys       []string                   `json:"missing_keys"`
+	SecretFindings    []HealthAuditSecretFinding `json:"secret_findings"`
 }
 
 func HandleEnvHealthAudit(argsRaw json.RawMessage, workspaceDir string) (CallToolResult, error) {
@@ -397,7 +404,7 @@ func HandleEnvHealthAudit(argsRaw json.RawMessage, workspaceDir string) (CallToo
 		_ = json.Unmarshal(argsRaw, &args)
 	}
 
-	exF, _, err := OpenConfinedEnvFile(workspaceDir, args.ExampleFile, ".env.example")
+	exF, exampleFile, err := OpenConfinedEnvFile(workspaceDir, args.ExampleFile, ".env.example")
 	if err != nil {
 		return CallToolResult{
 			Content: []ToolContent{{Type: "text", Text: fmt.Sprintf("Error: %v", err)}},
@@ -406,14 +413,26 @@ func HandleEnvHealthAudit(argsRaw json.RawMessage, workspaceDir string) (CallToo
 	}
 	defer exF.Close()
 
-	exampleVars, _ := schema.ParseEnvWithMetadataReader(exF)
+	exampleVars, err := schema.ParseEnvWithMetadataReader(exF)
+	if err != nil {
+		return CallToolResult{
+			Content: []ToolContent{{Type: "text", Text: fmt.Sprintf("Error reading schema file %s: %s", filepath.Base(exampleFile), SanitizeParseError(err))}},
+			IsError: true,
+		}, nil
+	}
 
 	envMap := make(map[string]string)
-	envF, _, err := OpenConfinedEnvFile(workspaceDir, args.EnvFile, ".env")
+	envF, envFile, err := OpenConfinedEnvFile(workspaceDir, args.EnvFile, ".env")
 	if err == nil {
 		defer envF.Close()
-		envMap, _ = schema.ParseEnvReader(envF)
-	} else if !os.IsNotExist(err) && !strings.Contains(err.Error(), "no such file") && !strings.Contains(err.Error(), "does not exist") {
+		envMap, err = schema.ParseEnvReader(envF)
+		if err != nil {
+			return CallToolResult{
+				Content: []ToolContent{{Type: "text", Text: fmt.Sprintf("Error reading env file %s: %s", filepath.Base(envFile), SanitizeParseError(err))}},
+				IsError: true,
+			}, nil
+		}
+	} else if !errors.Is(err, ErrNotExist) {
 		return CallToolResult{
 			Content: []ToolContent{{Type: "text", Text: fmt.Sprintf("Error: %v", err)}},
 			IsError: true,
@@ -433,23 +452,50 @@ func HandleEnvHealthAudit(argsRaw json.RawMessage, workspaceDir string) (CallToo
 	for k, v := range envMap {
 		for _, r := range scanner.SecretValuePatterns {
 			if r.Pattern.MatchString(v) {
-				hash := sha256.Sum256([]byte(v))
 				secretFindings = append(secretFindings, HealthAuditSecretFinding{
 					Key:         k,
 					Reason:      r.Reason,
 					Risk:        r.Risk,
 					MaskedValue: "[masked]",
-					Fingerprint: hex.EncodeToString(hash[:8]),
 				})
 				break
 			}
 		}
 	}
 
-	// Deterministic score calculation
+	// Score calculation based on doctor's Schema & Secret Integrity weights (15 / 12 / 8 -> 43% / 34% / 23% normalized)
 	score := 100
-	score -= len(missingKeys) * 15
-	score -= len(secretFindings) * 25
+	if len(secretFindings) > 0 {
+		penalty := len(secretFindings) * 20
+		if penalty > 43 {
+			penalty = 43
+		}
+		score -= penalty
+	}
+
+	if len(missingKeys) > 0 {
+		penalty := len(missingKeys) * 15
+		if penalty > 34 {
+			penalty = 34
+		}
+		score -= penalty
+	}
+
+	invalidTypeCount := 0
+	for _, ev := range exampleVars {
+		if val, exists := envMap[ev.Key]; exists && val != "" {
+			if errMsg := schema.ValidateValue(val, ev.Tags, envMap); errMsg != "" {
+				invalidTypeCount++
+			}
+		}
+	}
+	if invalidTypeCount > 0 {
+		penalty := invalidTypeCount * 8
+		if penalty > 23 {
+			penalty = 23
+		}
+		score -= penalty
+	}
 	if score < 0 {
 		score = 0
 	}
@@ -462,11 +508,12 @@ func HandleEnvHealthAudit(argsRaw json.RawMessage, workspaceDir string) (CallToo
 	}
 
 	auditResult := HealthAuditResult{
-		HealthScore:    score,
-		Status:         status,
-		TotalKeys:      len(envMap),
-		MissingKeys:    missingKeys,
-		SecretFindings: secretFindings,
+		ConfigHealthScore: score,
+		HealthScore:       score,
+		Status:            status,
+		TotalKeys:         len(envMap),
+		MissingKeys:       missingKeys,
+		SecretFindings:    secretFindings,
 	}
 
 	data, _ := json.MarshalIndent(auditResult, "", "  ")

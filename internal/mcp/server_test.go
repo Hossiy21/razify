@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -715,21 +716,32 @@ func TestMCP_DenyByDefault_OutputFormatting(t *testing.T) {
 func TestMCP_CanarySecretsAbsentFromAllToolResponses(t *testing.T) {
 	tmpDir := t.TempDir()
 
+	commentCanary := "CANARY_COMMENT_TOKEN_abcdef1234567890"
+	catCanary := "CANARY_CAT_TOKEN_1234567890abcdef"
+	tagCanary := "CANARY_TAG_TOKEN_fedcba0987654321"
+	hexCanary := "9f8e7d6c5b4a3928170e1d2c3b4a5968" // 32-char hex secret
+
 	canaries := []string{
 		"CANARY_SCHEMA_SECRET_9876543210",
 		"CANARY_CONFIG_SECRET_1122334455",
 		"CANARY_DIFF_SECRET_5566778899",
 		"CANARY_AUDIT_SECRET_7788990011",
 		"CANARY_URL_USERINFO_PASSWORD_667788",
+		commentCanary,
+		catCanary,
+		tagCanary,
+		hexCanary,
 	}
 
 	exampleFile := filepath.Join(tmpDir, ".env.example")
 	envFile := filepath.Join(tmpDir, ".env")
 
 	exampleContent := `# Safe public variables
-PORT=8080 # @type=port @required=true
+# Comment with sensitive canary: ` + commentCanary + `
+PORT=8080 # @type=port @required=true @desc=Port with ` + tagCanary + ` @category=` + catCanary + `
 DEBUG=true # @type=bool
 NODE_ENV=production # @enum(development,staging,production)
+HEX_SECRET=` + hexCanary + ` # @type=string
 
 # Sensitive and default-masked variables
 DATABASE_URL=postgres://admin:` + canaries[4] + `@db:5432/mydb # @type=url
@@ -742,6 +754,7 @@ AUDIT_TARGET=placeholder # @required=true
 	envContent := `PORT=8080
 DEBUG=true
 NODE_ENV=production
+HEX_SECRET=` + hexCanary + `
 DATABASE_URL=postgres://admin:` + canaries[4] + `@db:5432/mydb
 APP_SECRET=` + canaries[0] + `
 UNTRACKED_VAR=` + canaries[2] + `
@@ -765,11 +778,10 @@ AUDIT_TARGET=` + "sk_live_" + "000000000000000000000000" + `
 	if inspectRes.IsError {
 		t.Fatalf("HandleSchemaInspect reported error: %+v", inspectRes)
 	}
-	if len(inspectRes.Content) == 0 {
+	if len(inspectRes.Content) == 0 || inspectRes.Content[0].Text == "" {
 		t.Fatalf("HandleSchemaInspect returned empty content")
 	}
 	assertNoCanaries("schema_inspect", inspectRes.Content[0].Text)
-	// Verify allowed types are present while others are masked
 	if !strings.Contains(inspectRes.Content[0].Text, "8080") {
 		t.Errorf("schema_inspect missing valid port 8080")
 	}
@@ -795,7 +807,7 @@ AUDIT_TARGET=` + "sk_live_" + "000000000000000000000000" + `
 	if validateRes.IsError {
 		t.Fatalf("HandleEnvValidateConfig reported error: %+v", validateRes)
 	}
-	if len(validateRes.Content) == 0 {
+	if len(validateRes.Content) == 0 || validateRes.Content[0].Text == "" {
 		t.Fatalf("HandleEnvValidateConfig returned empty content")
 	}
 	assertNoCanaries("env_validate_config", validateRes.Content[0].Text)
@@ -808,7 +820,7 @@ AUDIT_TARGET=` + "sk_live_" + "000000000000000000000000" + `
 	if diffRes.IsError {
 		t.Fatalf("HandleEnvDiffKeys reported error: %+v", diffRes)
 	}
-	if len(diffRes.Content) == 0 {
+	if len(diffRes.Content) == 0 || diffRes.Content[0].Text == "" {
 		t.Fatalf("HandleEnvDiffKeys returned empty content")
 	}
 	assertNoCanaries("env_diff_keys", diffRes.Content[0].Text)
@@ -821,8 +833,106 @@ AUDIT_TARGET=` + "sk_live_" + "000000000000000000000000" + `
 	if auditRes.IsError {
 		t.Fatalf("HandleEnvHealthAudit reported error: %+v", auditRes)
 	}
-	if len(auditRes.Content) == 0 {
+	if len(auditRes.Content) == 0 || auditRes.Content[0].Text == "" {
 		t.Fatalf("HandleEnvHealthAudit returned empty content")
 	}
 	assertNoCanaries("env_health_audit", auditRes.Content[0].Text)
+	if strings.Contains(auditRes.Content[0].Text, "fingerprint_sha256") {
+		t.Errorf("SECURITY VIOLATION: raw unsalted fingerprint_sha256 was present in audit output")
+	}
+	if !strings.Contains(auditRes.Content[0].Text, "config_health_score") {
+		t.Errorf("env_health_audit output missing config_health_score")
+	}
+}
+
+// TestMCP_Base64ThresholdsCalibration verifies that calibrated base64 thresholds achieve >=90% detection
+// across 1,000 random strings per length 20-31 using a fixed seed (42).
+func TestMCP_Base64ThresholdsCalibration(t *testing.T) {
+	const b64chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+	r := rand.New(rand.NewSource(42))
+
+	for length := 20; length <= 31; length++ {
+		detected := 0
+		total := 1000
+		for i := 0; i < total; i++ {
+			b := make([]byte, length)
+			for j := 0; j < length; j++ {
+				b[j] = b64chars[r.Intn(len(b64chars))]
+			}
+			s := string(b)
+			if mcp.IsSecretPlaceholder("SECRET_KEY", s, nil) {
+				detected++
+			}
+		}
+
+		rate := float64(detected) / float64(total)
+		if rate < 0.90 {
+			t.Errorf("length %d detection rate %.2f%% < 90%% (%d/%d detected)",
+				length, rate*100, detected, total)
+		}
+	}
+}
+
+// TestMCP_OpenConfinedEnvFile_SwapRace tests TOCTOU / symlink swap detection in OpenConfinedEnvFile.
+func TestMCP_OpenConfinedEnvFile_SwapRace(t *testing.T) {
+	tmpDir := t.TempDir()
+	envPath := filepath.Join(tmpDir, ".env")
+	if err := os.WriteFile(envPath, []byte("PORT=8080\n"), 0600); err != nil {
+		t.Fatalf("failed to write original file: %v", err)
+	}
+
+	// 1. Regular file opens successfully
+	f, resolved, err := mcp.OpenConfinedEnvFile(tmpDir, ".env", ".env")
+	if err != nil {
+		t.Fatalf("expected regular file to open, got: %v", err)
+	}
+	f.Close()
+	if !strings.HasSuffix(filepath.ToSlash(resolved), "/.env") {
+		t.Errorf("unexpected resolved path: %s", resolved)
+	}
+
+	// 2. Direct symlink replacement: if .env is swapped to a symlink pointing to an internal file
+	dummyTarget := filepath.Join(tmpDir, "dummy.env")
+	if err := os.WriteFile(dummyTarget, []byte("DUMMY=true\n"), 0600); err != nil {
+		t.Fatalf("failed to write dummy: %v", err)
+	}
+	_ = os.Remove(envPath)
+	skipIfSymlinkFails(t, os.Symlink(dummyTarget, envPath))
+
+	// OpenConfinedEnvFile MUST reject it with ErrForbidden because target is a symlink
+	_, _, err = mcp.OpenConfinedEnvFile(tmpDir, ".env", ".env")
+	if err == nil {
+		t.Fatalf("SECURITY VIOLATION: expected symlink .env to be rejected, got nil error")
+	}
+	if !errors.Is(err, mcp.ErrForbidden) {
+		t.Fatalf("expected error wrapping ErrForbidden, got: %v", err)
+	}
+}
+
+// TestMCP_OpenConfinedEnvFile_TypedErrors tests typed sentinel error returns (ErrNotExist, ErrForbidden, ErrTooLarge).
+func TestMCP_OpenConfinedEnvFile_TypedErrors(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// 1. Missing file returns ErrNotExist
+	_, _, err := mcp.OpenConfinedEnvFile(tmpDir, ".env", ".env")
+	if !errors.Is(err, mcp.ErrNotExist) {
+		t.Errorf("expected ErrNotExist for missing file, got: %v", err)
+	}
+
+	// 2. Traversal or forbidden characters return ErrForbidden
+	_, _, err = mcp.OpenConfinedEnvFile(tmpDir, "../outside.env", ".env")
+	if !errors.Is(err, mcp.ErrForbidden) {
+		t.Errorf("expected ErrForbidden for traversal path, got: %v", err)
+	}
+
+	_, _, err = mcp.OpenConfinedEnvFile(tmpDir, ".env:stream", ".env")
+	if !errors.Is(err, mcp.ErrForbidden) {
+		t.Errorf("expected ErrForbidden for ADS path, got: %v", err)
+	}
+
+	// 3. Disallowed basename returns ErrForbidden
+	_, _, err = mcp.OpenConfinedEnvFile(tmpDir, "config.yaml", ".env")
+	if !errors.Is(err, mcp.ErrForbidden) {
+		t.Errorf("expected ErrForbidden for disallowed basename, got: %v", err)
+	}
 }

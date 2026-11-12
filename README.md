@@ -7,7 +7,7 @@
 **The Agent-Safe Configuration & Environment Engine.**
 
 Type-safe schema compliance, containerized command containment, secret leak shielding, and Model Context Protocol (MCP) diagnostics for developers and autonomous AI coding agents.  
-Sub-10ms performance. 100% offline-first. Zero cloud dependency. Every language.
+Sub-10ms performance. Fully offline-first. Zero cloud dependency. Multi-language support.
 
 [![npm version](https://img.shields.io/npm/v/razify.svg?color=6C63FF&style=flat-square)](https://www.npmjs.com/package/razify)
 [![VS Code Extension](https://img.shields.io/badge/VS_Code-vscode--razify-blue?style=flat-square&logo=visualstudiocode)](https://github.com/Hossiy21/razify)
@@ -69,7 +69,7 @@ Every engineering team loses hours to broken `.env` files:
 | 🎨 **VS Code Extension** | `vscode-razify` | Real-time red/yellow squigglies, hover tooltips & auto-completions. |
 | 🛡️ **Git Pre-Commit Guard** | `razify guard` | Sub-10ms pre-commit git hook blocking broken or insecure commits. |
 | 🤖 **Agent MCP Server** | `razify mcp` | JSON-RPC 2.0 stdio server providing safe schema inspection for Cursor, Claude Desktop & Antigravity without secret leakage. |
-| 🛡️ **Agent Policy Guard** | `razify guard --agent` | Configures `.gitignore`, `AGENTS.md` (advisory), and native agent deny files (`.cursorignore`, `.claudeignore`, `.aiderignore`) to steer AI coding agents toward MCP tools. |
+| 🛡️ **Agent Policy Guard** | `razify guard --agent` | Configures `.gitignore`, `AGENTS.md` (advisory), and native agent deny rules (`.cursorignore`, `.claude/settings.json`, `.aiderignore`) to steer AI coding agents toward MCP tools. |
 | 🤖 **GitHub Action** | `action.yml` | 1-step CI/CD Pull Request enforcement gate. |
 | 🔄 **Environment Diffing** | `razify diff` | Compare `.env` files side-by-side. |
 | 💡 **Auto-Fixer** | `razify fix` | Automatically sync missing template keys into `.env`. |
@@ -269,7 +269,7 @@ razify guard uninstall --agent
 
 When installed, Razify Agent Guard configures:
 - `.gitignore`: strictly ignores `.env` and `.env.*` (advisory barrier preventing accidental git commits).
-- **Native Agent Deny Files**: installs `.cursorignore`, `.claudeignore`, and `.aiderignore` files preventing AI coding tools from indexing or reading secret files.
+- **Native Agent Deny Rules**: installs `.cursorignore`, `.aiderignore`, `.claudeignore`, and native Claude Code permissions in `.claude/settings.json` preventing AI coding tools from indexing or reading secret files.
 - **`AGENTS.md`**: installs an advisory policy block steering AI coding assistants to use Razify MCP tools rather than reading `.env` directly.
 - **Git Pre-Commit Hook** (`razify guard install`): executes `razify check --quiet` before every commit, blocking commits containing missing required variables, schema violations, or leaked high-entropy secrets.
 
@@ -280,7 +280,7 @@ When installed, Razify Agent Guard configures:
 - 🔍 **`schema_inspect`**: Inspects required keys, types (`@type`), enumeration sets (`@enum`), ranges (`@range`), and documentation from `.env.example`. Never opens or exposes raw `.env` secrets.
 - 🧪 **`env_validate_config`**: Hermetically validates candidate key-value maps against schema rules in memory without touching disk, automatically masking secret-typed values in diagnostics.
 - 🔄 **`env_diff_keys`**: Compares key names between `.env` and `.env.example` to identify missing or untracked keys with strictly zero value exposure.
-- 🩺 **`env_health_audit`**: Computes project environment configuration health scores (0-100) and schema violations, automatically fingerprinting (SHA-256) or masking secret values.
+- 🩺 **`env_health_audit`**: Computes project environment configuration health scores (0-100) and schema violations, automatically masking secret values.
 
 ### ⚙️ Connecting Razify MCP to Your AI Tools
 
@@ -341,7 +341,7 @@ razify init --from-code -d ./services/backend -o ./services/backend/.env.example
 - **Go (`go/ast`)**: Inspects AST call expressions detecting `os.Getenv`, `os.LookupEnv`, and `os.Setenv`. Determines types from context such as `strconv.Atoi` (`int`/`port`) and `strconv.ParseBool` (`bool`).
 - **TypeScript & JavaScript**: Discovers `process.env.KEY`, `process.env['KEY']`, and `import.meta.env.KEY`. Extracts fallback default values (`|| 'default'`, `?? 'default'`) and parses `parseInt` / `Boolean` contexts.
 - **Python**: Scans `os.getenv('KEY', 'default')`, `os.environ.get(...)`, and direct bracket indexing `os.environ['KEY']` (marking missing keys as `@required`).
-- **Intelligent Deduplication & Schema Annotations**: Merges multiple occurrences across languages, infers `@type` annotations (`port`, `url`, `secret`, `bool`, `email`, `int`), categorizes into clear sections, and guarantees 100% compliance with `razify check`.
+- **Intelligent Deduplication & Schema Annotations**: Merges multiple occurrences across languages, infers `@type` annotations (`port`, `url`, `secret`, `bool`, `email`, `int`), categorizes into clear sections, and generates schemas ready for validation with `razify check`.
 
 ---
 
