@@ -5,7 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - Phase 4: Agent Guard & Model Context Protocol Server (`razify mcp` / `razify guard --agent`)
+## [Unreleased] - Phase 5: AST-Based Template Inference (`razify init --from-code`)
+
+### Added
+- **`razify init --from-code` AST Source Scraper:** Scans codebase repositories across Go, TypeScript/JavaScript, and Python to extract environment variable accesses and auto-generate clean, annotated `.env.example` templates:
+  - **Go Analysis (`internal/codegen/golang.go`):** Parses Go AST (`ast.CallExpr`) detecting `os.Getenv`, `os.LookupEnv`, and `os.Setenv`, extracting contextual types from `strconv.Atoi` (`int`/`port`), `strconv.ParseBool` (`bool`), and naming heuristics.
+  - **TypeScript/JavaScript Analysis (`internal/codegen/javascript.go`):** Scans `process.env.KEY`, `process.env['KEY']`, `import.meta.env.KEY`, extracting fallback default values (`|| 'default'`, `?? 'default'`) and type contexts (`parseInt`, `Boolean`).
+  - **Python Analysis (`internal/codegen/python.go`):** Scans `os.getenv('KEY', 'default')`, `os.environ.get(...)`, and `os.environ['KEY']` (marking direct bracket access as `@required`).
+  - **Deduplication & Cross-Language Merge:** Merges occurrences, prioritizes rich type definitions (`port`/`url`/`secret`/`bool`/`int`), preserves defaults, and groups variables into logical categories (`Server`, `Database`, `Security`, `Feature Flags`, `General`).
+  - **Schema Guarantee:** Generated `.env.example` templates are guaranteed to pass `razify check` with 0 errors out-of-the-box.
+- **Benchmarking Suite:** Added `BenchmarkExtract_Go` (~13.2 µs), `BenchmarkExtract_JS` (~14.1 µs), `BenchmarkExtract_Python` (~13.7 µs), and `BenchmarkGenerateEnvExample` (~9.6 µs).
+
+## [0.5.0] - Phase 4: Agent Guard & Model Context Protocol Server (`razify mcp` / `razify guard --agent`)
 
 ### Added
 - **`razify mcp` Stdio Server:** JSON-RPC 2.0 Model Context Protocol (MCP 2024-11-05) stdio server providing safe environment context to AI coding assistants without ever revealing production secrets:

@@ -72,6 +72,7 @@ Every engineering team loses hours to broken `.env` files:
 | 🤖 **GitHub Action** | `action.yml` | 1-step CI/CD Pull Request enforcement gate. |
 | 🔄 **Environment Diffing** | `razify diff` | Compare `.env` files side-by-side. |
 | 💡 **Auto-Fixer** | `razify fix` | Automatically sync missing template keys into `.env`. |
+| 🧬 **AST Code Scraper** | `razify init --from-code` | Auto-scans Go, TS/JS, and Python source code to bootstrap annotated `.env.example`. |
 | 📖 **Doc Generator** | `razify docs` | Auto-generate Markdown documentation from `.env.example`. |
 | 📊 **Health Auditor** | `razify audit` | Full configuration health report with a score out of 100. |
 
@@ -296,6 +297,26 @@ Add to your project or global `mcp_config.json`:
   }
 }
 ```
+
+---
+
+## 🧬 AST-Based Template Inference (`razify init --from-code`)
+
+Bootstrapping a `.env.example` file by hand for large or legacy codebases is tedious and error-prone. `razify init --from-code` performs static code analysis across Go, TypeScript/JavaScript, and Python to discover environment variable usages and automatically generate a structured, type-annotated template:
+
+```bash
+# Auto-generate .env.example by analyzing the codebase
+razify init --from-code
+
+# Target a specific subdirectory with custom output path and overwrite flag
+razify init --from-code -d ./services/backend -o ./services/backend/.env.example --force
+```
+
+### Multi-Language Static Analysis Capabilities
+- **Go (`go/ast`)**: Inspects AST call expressions detecting `os.Getenv`, `os.LookupEnv`, and `os.Setenv`. Determines types from context such as `strconv.Atoi` (`int`/`port`) and `strconv.ParseBool` (`bool`).
+- **TypeScript & JavaScript**: Discovers `process.env.KEY`, `process.env['KEY']`, and `import.meta.env.KEY`. Extracts fallback default values (`|| 'default'`, `?? 'default'`) and parses `parseInt` / `Boolean` contexts.
+- **Python**: Scans `os.getenv('KEY', 'default')`, `os.environ.get(...)`, and direct bracket indexing `os.environ['KEY']` (marking missing keys as `@required`).
+- **Intelligent Deduplication & Schema Annotations**: Merges multiple occurrences across languages, infers `@type` annotations (`port`, `url`, `secret`, `bool`, `email`, `int`), categorizes into clear sections, and guarantees 100% compliance with `razify check`.
 
 ---
 
