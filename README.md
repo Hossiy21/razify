@@ -4,10 +4,10 @@
 
 # Razify
 
-**The Configuration Integrity Engine for Environment Variables.**
+**The Agent-Safe Configuration & Environment Engine.**
 
-Type-safe validation, schema compliance, secret leak protection, and instant IDE diagnostics.  
-Sub-10ms performance. Offline-first. Zero cloud dependency. Every language.
+Type-safe schema compliance, containerized command containment, secret leak shielding, and Model Context Protocol (MCP) diagnostics for developers and autonomous AI coding agents.  
+Sub-10ms performance. 100% offline-first. Zero cloud dependency. Every language.
 
 [![npm version](https://img.shields.io/npm/v/razify.svg?color=6C63FF&style=flat-square)](https://www.npmjs.com/package/razify)
 [![VS Code Extension](https://img.shields.io/badge/VS_Code-vscode--razify-blue?style=flat-square&logo=visualstudiocode)](https://github.com/Hossiy21/razify)
@@ -62,6 +62,7 @@ Every engineering team loses hours to broken `.env` files:
 | Feature | Command | Description |
 |---|---|---|
 | ⚡ **Unified Integrity Check** | `razify check` | **Flagship**: Single-pass schema validation, type checking & secret leak scanning. |
+| 🔒 **Agent-Safe Sandbox** | `razify run --sandbox` | Isolated container containment with synthetic fake secrets, read-only workspace, and network isolation. |
 | 🩺 **Workspace Doctor** | `razify doctor` | Health checks environment integrity, Go/Node/Docker toolchains, port collisions & DB reachability (~12ms full, ~sub-10ms with `--fast`). |
 | 🔒 **Secret Leak Scanner** | `razify scan` | High-entropy string detection catching API keys, JWTs, and passwords. |
 | 📋 **Type Schema Engine** | In `.env.example` | Enforces `@type(...)`, `@enum(...)`, `@range(...)`, and `@requires(...)`. |
@@ -75,6 +76,29 @@ Every engineering team loses hours to broken `.env` files:
 | 🧬 **AST Code Scraper** | `razify init --from-code` | Auto-scans Go, TS/JS, and Python source code to bootstrap annotated `.env.example`. |
 | 📖 **Doc Generator** | `razify docs` | Auto-generate Markdown documentation from `.env.example`. |
 | 📊 **Health Auditor** | `razify audit` | Full configuration health report with a score out of 100. |
+
+---
+
+## ⚡ Performance Benchmarks & Ecosystem Comparison
+
+Razify is engineered from the ground up for sub-10ms CLI responsiveness, minimal memory footprint, and 100% offline-first execution:
+
+| Capability / Benchmark | **Razify v2.0** | **dotenv-linter** | **gitleaks** |
+|---|---|---|---|
+| **Single-Pass Check Time** | **5.25 ms** | ~18.40 ms | ~46.80 ms |
+| **Workspace Doctor Health Check** | **6.90 ms** (`--fast`) | ❌ *Unsupported* | ❌ *Unsupported* |
+| **Peak Memory Footprint (RSS)** | **17.7 MB** | ~22.1 MB | ~58.4 MB |
+| **Type & Range Schema Enforcement** | **Yes** (`@type`, `@range`, `@enum`) | ❌ *Unsupported* | ❌ *Unsupported* |
+| **Variable Dependency Checks** | **Yes** (`@requires`) | ❌ *Unsupported* | ❌ *Unsupported* |
+| **Secret Scanning & Entropy Analysis** | **Yes** (Entropy + Danger Patterns) | ❌ *Unsupported* | **Yes** (Regex only) |
+| **Autonomous Container Sandbox** | **Yes** (`razify run --sandbox`) | ❌ *Unsupported* | ❌ *Unsupported* |
+| **Model Context Protocol (MCP)** | **Yes** (`razify mcp` stdio server) | ❌ *Unsupported* | ❌ *Unsupported* |
+| **Agent Guard & `AGENTS.md` Policy** | **Yes** (`razify guard --agent`) | ❌ *Unsupported* | ❌ *Unsupported* |
+| **AST Source Code Auto-Discovery** | **Yes** (`razify init --from-code`) | ❌ *Unsupported* | ❌ *Unsupported* |
+| **OASIS SARIF v2.1.0 Export** | **Yes** (`--sarif`) | ❌ *Unsupported* | **Yes** (`--report-format sarif`) |
+| **100% Offline-First Architecture** | **Yes** (Zero telemetry/cloud calls) | **Yes** | **Yes** |
+
+Detailed microbenchmark allocations and reproduction steps are available in [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
 
 ---
 

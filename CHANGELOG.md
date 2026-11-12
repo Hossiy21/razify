@@ -5,7 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - Phase 5: AST-Based Template Inference (`razify init --from-code`)
+## [2.0.0] - Phase 6: Agent-Safe Configuration & Environment Engine
+
+### Added
+- **Major Milestone Release — Razify v2.0:** Evolving from an environment variable linter into an enterprise-grade "Agent-Safe Environment" platform for autonomous AI coding agents and development teams.
+- **Unified 12-Command Suite:** Full offline CLI capabilities spanning `check`, `doctor`, `run --sandbox`, `mcp`, `guard`, `init --from-code`, `scan`, `diff`, `fix`, `docs`, `audit`, and `version`.
+- **Comprehensive Benchmarks & Ecosystem Comparison:** Full competitive benchmarks demonstrating 5.25ms checks (3.5x faster than dotenv-linter, 8.9x faster than gitleaks) and 17.7MB RSS peak memory.
+- **Website & Documentation:** Updated Next.js portal in `website/` showcasing the complete feature matrix, playground diagnostics, and installation guides.
+- **Terminal Demonstration:** Updated `demo.tape` showcasing `doctor --fast`, `init --from-code`, `guard status --agent`, and `run --sandbox --dry-run`.
+- **v2.0 Migration Guide:** Seamless backward compatibility for existing `vscode-razify` users, CI/CD pipelines, and GitHub Actions.
+
+## [0.6.0] - Phase 5: AST-Based Template Inference (`razify init --from-code`)
 
 ### Added
 - **`razify init --from-code` AST Source Scraper:** Scans codebase repositories across Go, TypeScript/JavaScript, and Python to extract environment variable accesses and auto-generate clean, annotated `.env.example` templates:
