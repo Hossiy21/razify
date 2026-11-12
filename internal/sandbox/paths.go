@@ -3,13 +3,15 @@ package sandbox
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 )
 
 // ToDockerMountPath normalizes a host path for use in Docker CLI -v volume mount flags.
-// Converts Windows backslashes to forward slashes.
+// Converts Windows backslashes to forward slashes across all platforms.
 func ToDockerMountPath(hostPath string) string {
 	cleaned := filepath.Clean(hostPath)
-	return filepath.ToSlash(cleaned)
+	slashPath := filepath.ToSlash(cleaned)
+	return strings.ReplaceAll(slashPath, "\\", "/")
 }
 
 // FormatMountArg constructs a Docker -v volume mount argument.
