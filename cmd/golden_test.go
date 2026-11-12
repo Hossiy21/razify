@@ -63,15 +63,7 @@ func TestGoldenCheckJSON(t *testing.T) {
 				t.Fatalf("expected status %s, got %s", tc.wantStatus, output.Status)
 			}
 
-			// Normalize paths to forward slashes for golden comparison across OSes
-			normalizedOutput := output
-			normalizedOutput.EnvFile = filepath.ToSlash(output.EnvFile)
-			normalizedOutput.ExampleFile = filepath.ToSlash(output.ExampleFile)
-			for i, rem := range normalizedOutput.RemediationSteps {
-				normalizedOutput.RemediationSteps[i] = filepath.ToSlash(rem)
-			}
-
-			actualJSON, err := json.MarshalIndent(normalizedOutput, "", "  ")
+			actualJSON, err := json.MarshalIndent(output, "", "  ")
 			if err != nil {
 				t.Fatalf("json.MarshalIndent failed: %v", err)
 			}

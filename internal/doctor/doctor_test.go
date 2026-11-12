@@ -365,8 +365,18 @@ func TestDoctor_SecretsNeverPrinted(t *testing.T) {
 	fs.files[".env"] = []byte(fmt.Sprintf("DATABASE_URL=postgres://appuser:%s@localhost:5432/app\n", secretVal))
 
 	report := RunDoctor(DoctorOptions{}, deps)
+	if len(report.Checks) == 0 {
+		t.Fatalf("expected doctor checks to execute, got 0 checks")
+	}
 
+	foundServiceCheck := false
 	for _, c := range report.Checks {
+		if c.ID == "razify/doctor/service-unreachable" {
+			foundServiceCheck = true
+			if len(c.Message) == 0 {
+				t.Errorf("expected non-empty check message for service check")
+			}
+		}
 		if strings.Contains(c.Message, secretVal) {
 			t.Fatalf("LEAK in check message: %s", c.Message)
 		}
@@ -374,10 +384,16 @@ func TestDoctor_SecretsNeverPrinted(t *testing.T) {
 			t.Fatalf("LEAK in check fix: %s", c.Fix)
 		}
 	}
+	if !foundServiceCheck {
+		t.Errorf("expected service-unreachable check to have run")
+	}
 
 	sarifText, err := reporter.RenderSarif(report.Result, "test-version")
 	if err != nil {
 		t.Fatalf("sarif render error: %v", err)
+	}
+	if len(strings.TrimSpace(sarifText)) == 0 {
+		t.Fatalf("expected non-empty SARIF output")
 	}
 	if strings.Contains(sarifText, secretVal) {
 		t.Fatalf("LEAK in SARIF output: %s", sarifText)
