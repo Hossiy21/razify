@@ -24,6 +24,42 @@ func ValidateGuardrails(cfg Config) error {
 		return fmt.Errorf("guardrail violation: disabling seccomp is prohibited")
 	}
 
+	for _, cap := range cfg.CapAdd {
+		upper := strings.ToUpper(strings.TrimSpace(cap))
+		if upper == "SYS_ADMIN" || upper == "CAP_SYS_ADMIN" || upper == "ALL" {
+			return fmt.Errorf("guardrail violation: --cap-add %s is prohibited", cap)
+		}
+	}
+
+	if len(cfg.Device) > 0 {
+		return fmt.Errorf("guardrail violation: --device is prohibited as it exposes host devices")
+	}
+
+	if strings.ToLower(strings.TrimSpace(cfg.IpcMode)) == "host" {
+		return fmt.Errorf("guardrail violation: --ipc=host is prohibited as it exposes host shared memory")
+	}
+
+	if strings.ToLower(strings.TrimSpace(cfg.UsernsMode)) == "host" {
+		return fmt.Errorf("guardrail violation: --userns=host is prohibited as it disables user namespace isolation")
+	}
+
+	if strings.Contains(strings.ToLower(cfg.AppArmor), "unconfined") {
+		return fmt.Errorf("guardrail violation: apparmor=unconfined is prohibited")
+	}
+
+	for _, opt := range cfg.SecurityOpt {
+		lowerOpt := strings.ToLower(opt)
+		if strings.Contains(lowerOpt, "seccomp=unconfined") {
+			return fmt.Errorf("guardrail violation: seccomp=unconfined is prohibited")
+		}
+		if strings.Contains(lowerOpt, "apparmor=unconfined") {
+			return fmt.Errorf("guardrail violation: apparmor=unconfined is prohibited")
+		}
+		if strings.Contains(lowerOpt, "label=disable") || strings.Contains(lowerOpt, "label:disable") {
+			return fmt.Errorf("guardrail violation: label disable is prohibited")
+		}
+	}
+
 	// Check custom tmpfs or volume mounts for Docker socket
 	checkSocketPath := func(path string) error {
 		lower := strings.ToLower(path)

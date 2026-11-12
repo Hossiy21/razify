@@ -57,6 +57,12 @@ read-only workspace (:ro) with .git protection, exec-capable tmpfs for compilers
 		privileged, _ := cmd.Flags().GetBool("privileged")
 		pidMode, _ := cmd.Flags().GetString("pid")
 		seccomp, _ := cmd.Flags().GetString("seccomp")
+		capAdd, _ := cmd.Flags().GetStringSlice("cap-add")
+		device, _ := cmd.Flags().GetStringSlice("device")
+		ipcMode, _ := cmd.Flags().GetString("ipc")
+		usernsMode, _ := cmd.Flags().GetString("userns")
+		securityOpt, _ := cmd.Flags().GetStringSlice("security-opt")
+		apparmor, _ := cmd.Flags().GetString("apparmor")
 
 		var onlyKeys []string
 		if onlyStr != "" {
@@ -90,6 +96,12 @@ read-only workspace (:ro) with .git protection, exec-capable tmpfs for compilers
 			Privileged:        privileged,
 			PidMode:           pidMode,
 			Seccomp:           seccomp,
+			CapAdd:            capAdd,
+			Device:            device,
+			IpcMode:           ipcMode,
+			UsernsMode:        usernsMode,
+			SecurityOpt:       securityOpt,
+			AppArmor:          apparmor,
 			FakeSecrets:       fakeSecrets && !injectSecrets,
 			InjectSecrets:     injectSecrets,
 			OnlyKeys:          onlyKeys,
@@ -148,5 +160,11 @@ func init() {
 	runCmd.Flags().Bool("privileged", false, "Prohibited: privileged mode bypasses container isolation")
 	runCmd.Flags().String("pid", "", "PID namespace mode (host is prohibited)")
 	runCmd.Flags().String("seccomp", "", "Seccomp profile (unconfined is prohibited)")
+	runCmd.Flags().StringSlice("cap-add", nil, "Prohibited capabilities (e.g. SYS_ADMIN)")
+	runCmd.Flags().StringSlice("device", nil, "Prohibited: host device passthrough")
+	runCmd.Flags().String("ipc", "", "IPC mode (host is prohibited)")
+	runCmd.Flags().String("userns", "", "User namespace mode (host is prohibited)")
+	runCmd.Flags().StringSlice("security-opt", nil, "Security options (disabling seccomp/apparmor/label is prohibited)")
+	runCmd.Flags().String("apparmor", "", "AppArmor profile (unconfined is prohibited)")
 }
 
