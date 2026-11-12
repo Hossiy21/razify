@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 )
 
 // BuildDockerArgs constructs the docker run arguments and environment map according to the sandbox configuration.
@@ -93,7 +94,7 @@ func BuildDockerArgs(
 	if cfg.MaskEnvFiles && emptyMaskFilePath != "" {
 		sort.Strings(envFilesToMask)
 		for _, f := range envFilesToMask {
-			containerTarget := "/workspace/" + filepath.ToSlash(f)
+			containerTarget := "/workspace/" + strings.TrimPrefix(filepath.ToSlash(f), "/")
 			args = append(args, "-v", FormatMountArg(emptyMaskFilePath, containerTarget, "ro"))
 		}
 	}
@@ -115,10 +116,12 @@ func BuildDockerArgs(
 	// Working directory
 	args = append(args, "-w", "/workspace")
 
-	// User mapping (Unix UID:GID)
-	if cfg.User != "" {
-		args = append(args, "--user", cfg.User)
+	// User mapping (fixed non-root user on all platforms)
+	user := cfg.User
+	if user == "" {
+		user = ResolveUser("")
 	}
+	args = append(args, "--user", user)
 
 	// Environment variables: profile defaults
 	var profileEnvKeys []string
