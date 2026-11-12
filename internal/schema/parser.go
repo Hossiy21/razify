@@ -105,20 +105,29 @@ func ParseEnvWithMetadataReader(r io.Reader) ([]EnvVar, error) {
 			}
 		}
 
+		commentToParse := lastComment
+		if trailingComment != "" {
+			if commentToParse != "" {
+				commentToParse += " " + trailingComment
+			} else {
+				commentToParse = trailingComment
+			}
+		}
+
 		tags := make(map[string]string)
-		if lastComment != "" {
+		if commentToParse != "" {
 			// 1. Parentheses syntax: @tag(val) e.g. @type(url), @enum(dev,prod), @requires(DB_HOST)
-			for _, m := range tagParenRegex.FindAllStringSubmatch(lastComment, -1) {
+			for _, m := range tagParenRegex.FindAllStringSubmatch(commentToParse, -1) {
 				tags[strings.ToLower(m[1])] = strings.TrimSpace(m[2])
 			}
 
 			// 2. Equals syntax: @tag=val e.g. @type=int, @range=1-100
-			for _, m := range tagEqRegex.FindAllStringSubmatch(lastComment, -1) {
+			for _, m := range tagEqRegex.FindAllStringSubmatch(commentToParse, -1) {
 				tags[strings.ToLower(m[1])] = strings.TrimSpace(m[2])
 			}
 
 			// 3. Standalone boolean flags e.g. @required
-			for _, m := range tagStandaloneRegex.FindAllStringSubmatch(lastComment, -1) {
+			for _, m := range tagStandaloneRegex.FindAllStringSubmatch(commentToParse, -1) {
 				tagName := strings.ToLower(m[1])
 				if _, exists := tags[tagName]; !exists {
 					tags[tagName] = "true"
