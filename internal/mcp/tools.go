@@ -134,11 +134,7 @@ func HandleSchemaInspect(argsRaw json.RawMessage, workspaceDir string) (CallTool
 			inferredType = t
 		}
 
-		placeholder := v.Value
-		// If placeholder looks like a real or synthetic secret, redact it
-		if IsSecretPlaceholder(v.Key, placeholder, v.Tags) {
-			placeholder = "[REDACTED_SECRET_PLACEHOLDER]"
-		}
+		placeholder := SafeMCPValue(v.Key, v.Value, v.Tags)
 
 		items = append(items, SchemaItem{
 			Key:         v.Key,

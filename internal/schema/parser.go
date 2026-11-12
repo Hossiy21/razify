@@ -2,6 +2,7 @@ package schema
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"os"
 	"regexp"
@@ -14,6 +15,27 @@ var (
 	tagStandaloneRegex = regexp.MustCompile(`@(\w+)\b`)
 	tagStripRegex      = regexp.MustCompile(`@\w+=[\w\-\.,]+`)
 )
+
+// ParseErrorCode identifies the category of a syntax or formatting error in an env file.
+type ParseErrorCode string
+
+const (
+	ErrMissingEquals     ParseErrorCode = "MISSING_EQUALS"
+	ErrInvalidKey        ParseErrorCode = "INVALID_KEY"
+	ErrUnterminatedQuote ParseErrorCode = "UNTERMINATED_QUOTE"
+	ErrLineTooLong       ParseErrorCode = "LINE_TOO_LONG"
+	ErrSyntaxError       ParseErrorCode = "SYNTAX_ERROR"
+)
+
+// ParseError represents a structured dotenv parsing failure with NO raw input text.
+type ParseError struct {
+	Line int            `json:"line"`
+	Code ParseErrorCode `json:"code"`
+}
+
+func (e *ParseError) Error() string {
+	return fmt.Sprintf("parse error at line %d: %s", e.Line, e.Code)
+}
 
 // ParseEnvFile parses a basic key=value .env file.
 func ParseEnvFile(filename string) (map[string]string, error) {
@@ -28,19 +50,15 @@ func ParseEnvFile(filename string) (map[string]string, error) {
 
 // ParseEnvReader parses key=value pairs from an io.Reader.
 func ParseEnvReader(r io.Reader) (map[string]string, error) {
-	result := make(map[string]string)
-	scanner := bufio.NewScanner(r)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		parts := strings.SplitN(line, "=", 2)
-		if len(parts) == 2 {
-			result[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
-		}
+	vars, err := ParseEnvWithMetadataReader(r)
+	if err != nil {
+		return nil, err
 	}
-	return result, scanner.Err()
+	res := make(map[string]string, len(vars))
+	for _, v := range vars {
+		res[v.Key] = v.Value
+	}
+	return res, nil
 }
 
 // ParseEnvWithMetadata parses a .env or .env.example file extracting comments, categories, and @tags.
@@ -84,24 +102,81 @@ func ParseEnvWithMetadataReader(r io.Reader) ([]EnvVar, error) {
 
 		parts := strings.SplitN(line, "=", 2)
 		if len(parts) != 2 {
-			continue
+			return nil, &ParseError{Line: lineNum, Code: ErrMissingEquals}
 		}
 
 		key := strings.TrimSpace(parts[0])
-		valueWithComment := strings.TrimSpace(parts[1])
+		if key == "" {
+			return nil, &ParseError{Line: lineNum, Code: ErrInvalidKey}
+		}
 
+		valueWithComment := strings.TrimSpace(parts[1])
 		value := valueWithComment
 		trailingComment := ""
 
-		// Check for trailing comment (naive but common)
-		if hashIdx := strings.Index(valueWithComment, "#"); hashIdx != -1 {
-			// Basic support for quoted values (to avoid splitting on # inside quotes)
-			if !strings.HasPrefix(valueWithComment, "\"") || !strings.HasSuffix(valueWithComment, "\"") {
+		if strings.HasPrefix(valueWithComment, "\"") || strings.HasPrefix(valueWithComment, "'") {
+			quoteChar := valueWithComment[0]
+			startLine := lineNum
+
+			// Check if quote closes on this line
+			closeIdx := -1
+			for i := 1; i < len(valueWithComment); i++ {
+				if valueWithComment[i] == quoteChar && valueWithComment[i-1] != '\\' {
+					closeIdx = i
+					break
+				}
+			}
+
+			if closeIdx != -1 {
+				value = valueWithComment[1:closeIdx]
+				rest := strings.TrimSpace(valueWithComment[closeIdx+1:])
+				if strings.HasPrefix(rest, "#") {
+					trailingComment = strings.TrimSpace(strings.TrimPrefix(rest, "#"))
+				}
+			} else {
+				// Multi-line quoted value
+				var sb strings.Builder
+				sb.WriteString(valueWithComment[1:])
+				closed := false
+
+				for scanner.Scan() {
+					lineNum++
+					nextLine := scanner.Text()
+					foundIdx := -1
+					for i := 0; i < len(nextLine); i++ {
+						if nextLine[i] == quoteChar && (i == 0 || nextLine[i-1] != '\\') {
+							foundIdx = i
+							break
+						}
+					}
+
+					if foundIdx != -1 {
+						sb.WriteString("\n")
+						sb.WriteString(nextLine[:foundIdx])
+						rest := strings.TrimSpace(nextLine[foundIdx+1:])
+						if strings.HasPrefix(rest, "#") {
+							trailingComment = strings.TrimSpace(strings.TrimPrefix(rest, "#"))
+						}
+						closed = true
+						break
+					} else {
+						sb.WriteString("\n")
+						sb.WriteString(nextLine)
+					}
+				}
+
+				if !closed {
+					return nil, &ParseError{Line: startLine, Code: ErrUnterminatedQuote}
+				}
+				value = sb.String()
+			}
+		} else {
+			// Unquoted value: check for trailing comment
+			if hashIdx := strings.Index(valueWithComment, "#"); hashIdx != -1 {
 				value = strings.TrimSpace(valueWithComment[:hashIdx])
 				trailingComment = strings.TrimSpace(valueWithComment[hashIdx+1:])
 			} else {
-				// It's a quoted value, strip quotes and keep the whole thing
-				value = strings.TrimPrefix(strings.TrimSuffix(valueWithComment, "\""), "\"")
+				value = valueWithComment
 			}
 		}
 
@@ -155,11 +230,14 @@ func ParseEnvWithMetadataReader(r io.Reader) ([]EnvVar, error) {
 		lastComment = ""
 	}
 
-	return vars, scanner.Err()
+	if err := scanner.Err(); err != nil {
+		return nil, &ParseError{Line: lineNum, Code: ErrLineTooLong}
+	}
+
+	return vars, nil
 }
 
 // StripTags removes @tag=value substrings from a comment string.
 func StripTags(comment string) string {
 	return strings.TrimSpace(tagStripRegex.ReplaceAllString(comment, ""))
 }
-

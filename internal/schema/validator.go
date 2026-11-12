@@ -171,7 +171,7 @@ func ValidateValue(value string, tags map[string]string, envVars map[string]stri
 			}
 		}
 		if !found {
-			return fmt.Sprintf("Value '%s' is not in allowed enum options [%s]", value, e)
+			return fmt.Sprintf("Value is not in allowed enum options [%s]", e)
 		}
 	}
 
