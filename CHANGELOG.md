@@ -5,7 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - Phase 3: Agent-Safe Sandbox Execution (`razify run --sandbox`)
+## [Unreleased] - Phase 4: Agent Guard & Model Context Protocol Server (`razify mcp` / `razify guard --agent`)
+
+### Added
+- **`razify mcp` Stdio Server:** JSON-RPC 2.0 Model Context Protocol (MCP 2024-11-05) stdio server providing safe environment context to AI coding assistants without ever revealing production secrets:
+  - **`schema_inspect` Tool:** Inspects documented variables, extracted types (`@type`), enumeration sets (`@enum`), ranges (`@range`), and descriptions from `.env.example`. Never accesses raw `.env` files.
+  - **`env_validate_config` Tool:** Hermetically validates candidate key-value maps against schema rules in memory without touching disk, masking secret-typed values in findings.
+  - **`env_diff_keys` Tool:** Detects missing or untracked environment variable keys between `.env` and `.env.example`, strictly comparing key identifiers with zero value exposure.
+  - **`env_health_audit` Tool:** Computes project environment configuration health scores (0-100) and schema violations, automatically fingerprinting (SHA-256) or redacting secret values.
+- **`razify guard --agent` Agent Guard Subsystem:** Protects repositories against inadvertent `.env` exposure by AI coding models:
+  - **`status` Mode:** Checks git tracking (`git ls-files .env .env.*`), verifies `.gitignore` protection, and verifies `AGENTS.md` policy directives. Displays ready-to-copy MCP server configs for Cursor, Claude Desktop, Antigravity, and Gemini CLI.
+  - **`install` Mode:** Idempotently ensures `.env` is ignored in `.gitignore`, installs the Razify Agent Guard directives in `AGENTS.md`, and verifies git pre-commit integrity hooks.
+  - **`uninstall` Mode:** Safely strips agent guard policy directives from `AGENTS.md`.
+- **Benchmarking Suite:** Added `BenchmarkMCP_ToolsList` (~31.0 µs), `BenchmarkMCP_SchemaInspect` (~150.1 µs), and `BenchmarkMCP_EnvValidateConfig` (~153.8 µs).
+
+## [0.4.0] - Phase 3: Agent-Safe Sandbox Execution (`razify run --sandbox`)
 
 ### Added
 - **`razify run --sandbox` Command:** Isolated command execution inside unprivileged OCI containers tailored for AI coding agents and developer workflows:

@@ -67,6 +67,8 @@ Every engineering team loses hours to broken `.env` files:
 | 📋 **Type Schema Engine** | In `.env.example` | Enforces `@type(...)`, `@enum(...)`, `@range(...)`, and `@requires(...)`. |
 | 🎨 **VS Code Extension** | `vscode-razify` | Real-time red/yellow squigglies, hover tooltips & auto-completions. |
 | 🛡️ **Git Pre-Commit Guard** | `razify guard` | Sub-10ms pre-commit git hook blocking broken or insecure commits. |
+| 🤖 **Agent MCP Server** | `razify mcp` | JSON-RPC 2.0 stdio server providing safe schema inspection for Cursor, Claude Desktop & Antigravity without secret leakage. |
+| 🛡️ **Agent Policy Guard** | `razify guard --agent` | Shields `.env` files from AI coding assistants and enforces `AGENTS.md` policy directives. |
 | 🤖 **GitHub Action** | `action.yml` | 1-step CI/CD Pull Request enforcement gate. |
 | 🔄 **Environment Diffing** | `razify diff` | Compare `.env` files side-by-side. |
 | 💡 **Auto-Fixer** | `razify fix` | Automatically sync missing template keys into `.env`. |
@@ -218,6 +220,82 @@ razify run --sandbox --only PORT,DB_URL -- node server.js
 - **Stream Masking**: Known secrets, along with their base64-encoded and URL-encoded variants, are automatically redacted from `stdout` and `stderr`.
 
 For complete details on threat boundaries, guardrail rejections, and residual risks, see [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md).
+
+---
+
+## 🤖 Agent Guard & Model Context Protocol (`razify mcp` / `razify guard --agent`)
+
+Autonomous AI coding agents (such as Cursor, Claude Desktop, Antigravity, and Gemini CLI) often attempt to read `.env` files directly when exploring repositories, inadvertently pulling live production secrets into their prompt context windows.
+
+Razify provides a two-pronged solution: an **Agent Policy Guard** that instructs agents never to read raw `.env` files, and a high-performance **Model Context Protocol (MCP)** server that exposes safe environment metadata tools.
+
+### 🛡️ 1. Agent Guard Subsystem (`razify guard --agent`)
+
+```bash
+# Check repository protection status and view IDE MCP snippets
+razify guard status --agent
+
+# Automatically configure .gitignore and AGENTS.md policy directives
+razify guard install --agent
+
+# Remove agent guard policy directives from AGENTS.md
+razify guard uninstall --agent
+```
+
+When installed, Razify Agent Guard ensures:
+- `.env` and `.env.*` patterns are strictly ignored in `.gitignore`.
+- An `AGENTS.md` policy block is installed directing coding agents to use Razify MCP tools rather than reading `.env` directly.
+- Git pre-commit hooks verify that no secret files are tracked in the git index (`git ls-files`).
+
+### 🔌 2. Model Context Protocol Server (`razify mcp`)
+
+`razify mcp` starts a lightweight JSON-RPC 2.0 stdio server implementing the official MCP specification (2024-11-05). It executes sub-millisecond queries (~31–153 µs) with zero external network overhead:
+
+- 🔍 **`schema_inspect`**: Inspects required keys, types (`@type`), enumeration sets (`@enum`), ranges (`@range`), and documentation from `.env.example`. Never opens or exposes raw `.env` secrets.
+- 🧪 **`env_validate_config`**: Hermetically validates candidate key-value maps against schema rules in memory without touching disk, automatically masking secret-typed values in diagnostics.
+- 🔄 **`env_diff_keys`**: Compares key names between `.env` and `.env.example` to identify missing or untracked keys with strictly zero value exposure.
+- 🩺 **`env_health_audit`**: Computes project environment configuration health scores (0-100) and schema violations, automatically fingerprinting (SHA-256) or masking secret values.
+
+### ⚙️ Connecting Razify MCP to Your AI Tools
+
+#### Cursor (`.cursor/mcp.json`)
+Create or edit `.cursor/mcp.json` in your workspace:
+```json
+{
+  "mcpServers": {
+    "razify": {
+      "command": "razify",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+#### Claude Desktop (`claude_desktop_config.json`)
+Add to `claude_desktop_config.json`:
+```json
+{
+  "mcpServers": {
+    "razify": {
+      "command": "razify",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+#### Antigravity / Gemini CLI (`mcp_config.json`)
+Add to your project or global `mcp_config.json`:
+```json
+{
+  "mcpServers": {
+    "razify": {
+      "command": "razify",
+      "args": ["mcp"]
+    }
+  }
+}
+```
 
 ---
 
