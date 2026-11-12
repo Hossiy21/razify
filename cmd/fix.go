@@ -6,27 +6,11 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sync"
 	"time"
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
-
-// fileLocks tracks locks per file to prevent concurrent modifications
-var fileLocks = make(map[string]*sync.Mutex)
-var locksMutex = &sync.Mutex{}
-
-// getFileLock returns a mutex for a specific file (creates one if it doesn't exist)
-func getFileLock(filename string) *sync.Mutex {
-	locksMutex.Lock()
-	defer locksMutex.Unlock()
-
-	if _, exists := fileLocks[filename]; !exists {
-		fileLocks[filename] = &sync.Mutex{}
-	}
-	return fileLocks[filename]
-}
 
 // acquireFileLock attempts to acquire a lock on a file with retries
 func acquireFileLock(filename string, maxRetries int) error {
@@ -127,7 +111,7 @@ var fixCmd = &cobra.Command{
 		added, backup, err := RunFix(envFile, exampleFile, dryRun, noBackup)
 		if err != nil {
 			fmt.Printf("Error: %v\n", err)
-			os.Exit(1)
+			os.Exit(2)
 		}
 
 		success := color.New(color.FgGreen, color.Bold)

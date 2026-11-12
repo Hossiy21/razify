@@ -17,7 +17,10 @@ var versionCmd = &cobra.Command{
 	Short: "Print the version number of Razify",
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Printf("Razify %s\n", CurrentVersion)
-		CheckForUpdates(true)
+		checkOnline, _ := cmd.Flags().GetBool("check")
+		if checkOnline {
+			CheckForUpdates(true)
+		}
 	},
 }
 
@@ -56,4 +59,5 @@ func CheckForUpdates(verbose bool) {
 
 func init() {
 	rootCmd.AddCommand(versionCmd)
+	versionCmd.Flags().Bool("check", false, "Check for newer versions online")
 }

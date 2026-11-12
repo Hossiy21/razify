@@ -84,7 +84,7 @@ var initCmd = &cobra.Command{
 		err := os.WriteFile(filename, []byte(content), 0644)
 		if err != nil {
 			fmt.Printf("\n❌ Error writing file: %v\n", err)
-			os.Exit(1)
+			os.Exit(2)
 		}
 
 		green.Printf("\n✔ Successfully created %s with %d variables!\n", filename, len(entries))

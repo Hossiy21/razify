@@ -168,6 +168,38 @@ jobs:
 
 ---
 
+## 🚦 Exit Code Contract
+
+Razify maintains a strict, unified exit code contract across all terminal, `--json`, and `--sarif` output modes:
+
+| Exit Code | Meaning | Description |
+|---|---|---|
+| `0` | **Clean / Passed** | Configuration is compliant, valid, and zero secrets or errors were detected. |
+| `1` | **Violations Detected** | Schema violations (missing keys, invalid types) or secret leaks detected. |
+| `2` | **Fatal Error** | Operational or system failure (target file missing, unparseable arguments, I/O failure). |
+
+### Customizing Violation Exit Code
+You can override the exit code returned when violations are found using the global `--exit-code` flag (useful for CI/CD gates that treat warnings with custom status codes):
+```bash
+razify check --exit-code 42
+```
+
+---
+
+## 📊 Output Formats (JSON & SARIF v2.1.0)
+
+Razify natively supports machine-readable output for IDEs, CI/CD pipelines, and GitHub Code Scanning:
+
+```bash
+# Output structured JSON
+razify check --json
+
+# Output OASIS standard SARIF v2.1.0 for GitHub Code Scanning
+razify check --sarif
+```
+
+---
+
 ## 📄 License
 
 MIT License © 2026 [hossiy21](https://github.com/Hossiy21).
