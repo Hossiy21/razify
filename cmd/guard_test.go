@@ -132,7 +132,15 @@ func TestGuard_PreCommitLifecycle_TempGitRepo(t *testing.T) {
 		t.Fatalf("getHookPath failed with core.hooksPath: %v", err)
 	}
 	expectedCustomPath := filepath.Join(tempGitDir, customHooksDir, "pre-commit")
-	if filepath.Clean(customHookPath) != filepath.Clean(expectedCustomPath) {
+	evalCustom, _ := filepath.EvalSymlinks(customHookPath)
+	evalExpected, _ := filepath.EvalSymlinks(expectedCustomPath)
+	if evalCustom == "" {
+		evalCustom = filepath.Clean(customHookPath)
+	}
+	if evalExpected == "" {
+		evalExpected = filepath.Clean(expectedCustomPath)
+	}
+	if !strings.EqualFold(evalCustom, evalExpected) {
 		t.Fatalf("getHookPath did not honor core.hooksPath! Expected %s, got %s", expectedCustomPath, customHookPath)
 	}
 

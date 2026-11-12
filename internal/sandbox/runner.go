@@ -151,6 +151,7 @@ func Execute(
 		}
 		emptyTempPath = emptyFile.Name()
 		_ = emptyFile.Close()
+		_ = os.Chmod(emptyTempPath, 0666)
 		defer os.Remove(emptyTempPath)
 	}
 
