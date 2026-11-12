@@ -15,11 +15,11 @@ func TestMaskValue(t *testing.T) {
 		input string
 		want  string
 	}{
-		{"", "****"},
-		{"a", "****"},
-		{"abcd", "****"},
-		{"secret", "se**et"},
-		{"password123", "pa*******23"},
+		{"", "********"},
+		{"a", "********"},
+		{"abcd", "********"},
+		{"secret", "********"},
+		{"password123", "***********"},
 		{mockStripeKey, "sk****************************00"},
 	}
 

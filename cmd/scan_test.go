@@ -68,10 +68,10 @@ func TestMaskValue(t *testing.T) {
 		input    string
 		expected string
 	}{
-		{"123", "****"},
-		{"1234", "****"},
-		{"secret", "se**et"},
-		{"password123", "pa*******23"},
+		{"123", "********"},
+		{"1234", "********"},
+		{"secret", "********"},
+		{"password123", "***********"},
 	}
 
 	for _, tt := range tests {

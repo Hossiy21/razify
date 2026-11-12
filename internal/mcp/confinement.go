@@ -12,7 +12,10 @@ import (
 	"github.com/Hossiy21/razify/internal/schema"
 )
 
-const UnknownParseErrorMessage = "failed to parse environment file due to a syntax error"
+const (
+	UnknownParseErrorMessage = "failed to parse environment file due to a syntax error"
+	MaxAllowedFileSize       = 1024 * 1024 // 1 MB cap
+)
 
 var (
 	sensitiveKeyRegex = regexp.MustCompile(`(?i)(secret|password|passwd|pwd|token|auth|credential|api_key|apikey|private_key|privatekey|_key$|access_key|dsn|connection_string|salt|signing|bearer|cookie|session|jwt|webhook|cert)`)
@@ -28,14 +31,15 @@ var (
 )
 
 // ValidateWorkspaceDir canonicalizes workspaceDir, ensuring it is non-empty, exists,
-// is a directory, and is NOT a filesystem root, Windows drive root, or the user's home directory.
+// is a directory, and is NOT a filesystem root, Windows drive root, the user's home directory,
+// or an ancestor of the user's home directory.
 func ValidateWorkspaceDir(ws string) (string, error) {
 	trimmed := strings.TrimSpace(ws)
 	if trimmed == "" {
 		return "", errors.New("security violation: workspace directory must be explicitly specified via --workspace")
 	}
 
-	// Refuse Windows drive root directly (e.g. C: or C:\ or C:/)
+	// Refuse ':' in workspace string to avoid drive ambiguities or alternate stream confusion
 	if len(trimmed) == 2 && trimmed[1] == ':' {
 		return "", fmt.Errorf("security violation: refusing to use drive root %q as workspace", ws)
 	}
@@ -53,11 +57,11 @@ func ValidateWorkspaceDir(ws string) (string, error) {
 		return "", fmt.Errorf("security violation: workspace directory %q does not exist or cannot be resolved: %w", ws, err)
 	}
 
-	fi, err := os.Stat(realWs)
+	wsFi, err := os.Stat(realWs)
 	if err != nil {
 		return "", fmt.Errorf("security violation: cannot stat workspace directory %q: %w", ws, err)
 	}
-	if !fi.IsDir() {
+	if !wsFi.IsDir() {
 		return "", fmt.Errorf("security violation: workspace %q is not a directory", ws)
 	}
 
@@ -81,24 +85,90 @@ func ValidateWorkspaceDir(ws string) (string, error) {
 		return "", fmt.Errorf("security violation: refusing to use system root %q as workspace", ws)
 	}
 
-	// Refuse user home directory
+	// Refuse user home directory and any ancestor of the home directory
 	if homeDir, err := os.UserHomeDir(); err == nil && homeDir != "" {
-		cleanHome := filepath.Clean(homeDir)
-		if realHome, err := filepath.EvalSymlinks(cleanHome); err == nil {
-			if cleanWs == cleanHome || cleanWs == realHome || realWs == realHome {
+		homeFi, errHome := os.Stat(homeDir)
+		if errHome == nil {
+			if os.SameFile(homeFi, wsFi) {
 				return "", fmt.Errorf("security violation: refusing to use user home directory %q as workspace", ws)
 			}
-		} else if cleanWs == cleanHome {
-			return "", fmt.Errorf("security violation: refusing to use user home directory %q as workspace", ws)
+		}
+
+		realHome, err := filepath.EvalSymlinks(homeDir)
+		if err == nil {
+			cleanRealHome := filepath.Clean(realHome)
+			if cleanWs == cleanRealHome {
+				return "", fmt.Errorf("security violation: refusing to use user home directory %q as workspace", ws)
+			}
+
+			// Check if cleanWs is an ancestor of cleanRealHome
+			relHome, err := filepath.Rel(cleanWs, cleanRealHome)
+			if err == nil {
+				sep := string(filepath.Separator)
+				if relHome == "." {
+					return "", fmt.Errorf("security violation: refusing to use user home directory %q as workspace", ws)
+				}
+				if relHome != ".." && !strings.HasPrefix(relHome, ".."+sep) && !filepath.IsAbs(relHome) {
+					return "", fmt.Errorf("security violation: refusing to use home directory ancestor %q as workspace", ws)
+				}
+			}
 		}
 	}
 
 	return realWs, nil
 }
 
+// OpenConfinedEnvFile opens an environment file strictly confined within workspaceDir using os.OpenRoot.
+// It verifies regular file status and enforces the 1 MB file size cap directly on the open handle.
+func OpenConfinedEnvFile(workspaceDir, reqPath, defaultFile string) (*os.File, string, error) {
+	resolvedPath, err := ResolveConfinedPath(workspaceDir, reqPath, defaultFile)
+	if err != nil {
+		return nil, "", err
+	}
+
+	realWorkspace, err := ValidateWorkspaceDir(workspaceDir)
+	if err != nil {
+		return nil, "", err
+	}
+
+	rel, err := filepath.Rel(realWorkspace, resolvedPath)
+	if err != nil {
+		return nil, "", fmt.Errorf("security violation: failed to determine relative path for %q: %w", resolvedPath, err)
+	}
+
+	root, err := os.OpenRoot(realWorkspace)
+	if err != nil {
+		return nil, "", fmt.Errorf("security violation: failed to open workspace root: %w", err)
+	}
+	defer root.Close()
+
+	cleanRel := filepath.ToSlash(filepath.Clean(rel))
+	f, err := root.Open(cleanRel)
+	if err != nil {
+		return nil, "", fmt.Errorf("security violation: failed to open %q within workspace root: %w", reqPath, err)
+	}
+
+	fi, err := f.Stat()
+	if err != nil {
+		f.Close()
+		return nil, "", fmt.Errorf("security violation: failed to stat opened file %q: %w", reqPath, err)
+	}
+	if !fi.Mode().IsRegular() {
+		f.Close()
+		return nil, "", fmt.Errorf("security violation: target %q is not a regular file", reqPath)
+	}
+	if fi.Size() > MaxAllowedFileSize {
+		f.Close()
+		return nil, "", fmt.Errorf("security violation: file %q exceeds maximum allowed size of 1MB (%d bytes)", reqPath, fi.Size())
+	}
+
+	return f, resolvedPath, nil
+}
+
 // ResolveConfinedPath resolves reqPath strictly within workspaceDir using fail-closed security checks.
-// It rejects Windows rooted/drive-relative/UNC/NUL paths, symlink escapes, non-regular files,
-// and enforces basename restrictions (.env, .env.*, *.env). For non-existent targets,
+// It rejects Windows rooted/drive-relative/UNC/NUL paths, ':' alternate data streams,
+// symlink escapes, symlinked final components (closing in-workspace symlink bypasses), non-regular files,
+// 1 MB size violations, and enforces basename restrictions (.env, .env.*, *.env). For non-existent targets,
 // it resolves the longest existing ancestor to verify workspace containment.
 func ResolveConfinedPath(workspaceDir, reqPath, defaultFile string) (string, error) {
 	realWorkspace, err := ValidateWorkspaceDir(workspaceDir)
@@ -113,24 +183,24 @@ func ResolveConfinedPath(workspaceDir, reqPath, defaultFile string) (string, err
 		return "", errors.New("security violation: no path specified and no default file provided")
 	}
 
-	// 1. Reject null bytes
+	// 1. Reject ':' anywhere in reqPath (NTFS alternate data streams and drive prefixes)
+	if strings.ContainsRune(reqPath, ':') {
+		return "", fmt.Errorf("security violation: ':' is prohibited in path %q (NTFS alternate data streams / drive prefixes)", reqPath)
+	}
+
+	// 2. Reject null bytes
 	if strings.ContainsRune(reqPath, 0) {
 		return "", errors.New("security violation: path contains null bytes")
 	}
 
-	// 2. Reject UNC paths (\\... or //...)
+	// 3. Reject UNC paths (\\... or //...)
 	if strings.HasPrefix(reqPath, `\\`) || strings.HasPrefix(reqPath, `//`) {
 		return "", fmt.Errorf("security violation: UNC path %q is prohibited", reqPath)
 	}
 
-	// 3. Reject rooted paths without drive letter (\... or /...)
+	// 4. Reject rooted paths without drive letter (\... or /...)
 	if strings.HasPrefix(reqPath, `\`) || strings.HasPrefix(reqPath, `/`) {
 		return "", fmt.Errorf("security violation: rooted path %q is prohibited", reqPath)
-	}
-
-	// 4. Reject drive-relative or drive-absolute paths (C:... or D:/...)
-	if len(reqPath) >= 2 && reqPath[1] == ':' {
-		return "", fmt.Errorf("security violation: drive-relative or absolute drive path %q is prohibited", reqPath)
 	}
 
 	// 5. Reject general absolute paths
@@ -171,17 +241,29 @@ func ResolveConfinedPath(workspaceDir, reqPath, defaultFile string) (string, err
 		return "", fmt.Errorf("security violation: path %q escapes workspace directory", reqPath)
 	}
 
-	// 9. Filesystem check
-	_, statErr := os.Stat(targetPath)
-	if statErr == nil {
-		// Target exists: resolve full symlink and verify regular file
+	// 9. Filesystem check using os.Lstat on targetPath
+	lfi, lstatErr := os.Lstat(targetPath)
+	if lstatErr == nil {
+		// Final component check: reject if final component is a symlink.
+		// This closes the bypass where an in-workspace symlink named .env points to .git/config, credentials.json, etc.
+		// It also closes dangling symlinks immediately.
+		if lfi.Mode()&os.ModeSymlink != 0 {
+			return "", fmt.Errorf("security violation: target %q is a symlink", reqPath)
+		}
+
+		// Resolve full path and re-verify basename on the resolved target
 		realTarget, err := filepath.EvalSymlinks(targetPath)
 		if err != nil {
 			return "", fmt.Errorf("security violation: failed to resolve symlink for %q: %w", reqPath, err)
 		}
 
+		resolvedBase := filepath.Base(realTarget)
+		if !isAllowedEnvBasename(resolvedBase) {
+			return "", fmt.Errorf("security violation: resolved target basename %q is prohibited; must match .env, .env.*, or *.env", resolvedBase)
+		}
+
 		if !isWithin(realWorkspace, realTarget) {
-			return "", fmt.Errorf("security violation: symlink %q escapes workspace directory", reqPath)
+			return "", fmt.Errorf("security violation: path %q escapes workspace directory via symlink", reqPath)
 		}
 
 		info, err := os.Stat(realTarget)
@@ -191,12 +273,39 @@ func ResolveConfinedPath(workspaceDir, reqPath, defaultFile string) (string, err
 		if !info.Mode().IsRegular() {
 			return "", fmt.Errorf("security violation: target %q is not a regular file", reqPath)
 		}
+		if info.Size() > MaxAllowedFileSize {
+			return "", fmt.Errorf("security violation: file %q exceeds maximum allowed size of 1MB (%d bytes)", reqPath, info.Size())
+		}
+
+		// Verify through os.OpenRoot ensuring confinement is enforced at OS open level
+		rel, err := filepath.Rel(realWorkspace, realTarget)
+		if err == nil {
+			root, err := os.OpenRoot(realWorkspace)
+			if err != nil {
+				return "", fmt.Errorf("security violation: failed to open workspace root: %w", err)
+			}
+			defer root.Close()
+
+			f, err := root.Open(filepath.ToSlash(filepath.Clean(rel)))
+			if err != nil {
+				return "", fmt.Errorf("security violation: cannot open %q via workspace root: %w", reqPath, err)
+			}
+			defer f.Close()
+
+			fi, err := f.Stat()
+			if err != nil || !fi.Mode().IsRegular() {
+				return "", fmt.Errorf("security violation: target %q is not a regular file", reqPath)
+			}
+			if fi.Size() > MaxAllowedFileSize {
+				return "", fmt.Errorf("security violation: file %q exceeds maximum allowed size of 1MB (%d bytes)", reqPath, fi.Size())
+			}
+		}
 
 		return realTarget, nil
 	}
 
-	if !os.IsNotExist(statErr) {
-		return "", fmt.Errorf("security violation: error inspecting target path %q: %w", reqPath, statErr)
+	if !os.IsNotExist(lstatErr) {
+		return "", fmt.Errorf("security violation: error inspecting target path %q: %w", reqPath, lstatErr)
 	}
 
 	// 10. Target does NOT exist: resolve longest existing ancestor
@@ -245,6 +354,7 @@ func ResolveConfinedPath(workspaceDir, reqPath, defaultFile string) (string, err
 	return resolvedPath, nil
 }
 
+// isAllowedEnvBasename verifies the file basename matches .env, .env.*, or *.env.
 func isAllowedEnvBasename(base string) bool {
 	if base == ".env" {
 		return true
@@ -259,6 +369,7 @@ func isAllowedEnvBasename(base string) bool {
 }
 
 // isWithin checks if target is strictly inside base (not base itself and does not escape with ..).
+// Note: checks rel == ".." or rel starts with ".."+sep, avoiding flawed prefix matches like /work vs /work-evil.
 func isWithin(base, target string) bool {
 	rel, err := filepath.Rel(base, target)
 	if err != nil {
@@ -298,7 +409,17 @@ func SanitizeParseError(err error) string {
 }
 
 // IsSecretPlaceholder returns true if a key name, default value, or schema tag indicates a secret.
-// It applies per-charset entropy thresholds, URL userinfo detection, and extended sensitive key names.
+//
+// NOTE: Shannon entropy is a secondary defense heuristic. Deterministic pattern matching,
+// schema tags (@type=secret/password/token/key), sensitive key names, and URL userinfo detection
+// act as primary defense layers.
+//
+// For short base64 sequences (length < 32), Shannon entropy has higher variance due to small
+// sample sizes (e.g. structured English identifiers with high character diversity may approach
+// high entropy). Consequently:
+// - Hex strings require len >= 32 and Shannon entropy >= 3.0.
+// - Base64-like strings: for len >= 32, entropy threshold is >= 4.0; for lengths 20 <= len < 32,
+//   the threshold is tightened to >= 4.3 to reduce false positives on diverse English identifiers.
 func IsSecretPlaceholder(key, val string, tags map[string]string) bool {
 	if val == "" {
 		return false
@@ -338,7 +459,7 @@ func IsSecretPlaceholder(key, val string, tags map[string]string) bool {
 		}
 	}
 
-	// 5. Per-charset entropy thresholds
+	// 5. Per-charset entropy thresholds (secondary heuristic layer)
 	// Hex secrets: len >= 32, entropy >= 3.0
 	if isHexString(val) && len(val) >= 32 {
 		if scanner.ShannonEntropy(val) >= 3.0 {
@@ -346,9 +467,12 @@ func IsSecretPlaceholder(key, val string, tags map[string]string) bool {
 		}
 	}
 
-	// Base64-like secrets: len >= 20, entropy >= 4.0
-	if isBase64Like(val) && len(val) >= 20 {
-		if scanner.ShannonEntropy(val) >= 4.0 {
+	// Base64-like secrets: secondary heuristic
+	if isBase64Like(val) {
+		if len(val) >= 32 && scanner.ShannonEntropy(val) >= 4.0 {
+			return true
+		}
+		if len(val) >= 20 && len(val) < 32 && scanner.ShannonEntropy(val) >= 4.3 {
 			return true
 		}
 	}

@@ -106,3 +106,14 @@ DATABASE_URL=postgres://localhost:5432/db
 		t.Fatalf("SECURITY VIOLATION: Raw secret %q found in MCP server stdout!\n%s", secretVal, outStr)
 	}
 }
+
+func TestMCPCmd_RefuseWithoutWorkspace(t *testing.T) {
+	_ = mcpCmd.Flags().Set("workspace", "")
+	err := mcpCmd.RunE(mcpCmd, []string{})
+	if err == nil {
+		t.Fatal("expected mcp command to fail without --workspace")
+	}
+	if !strings.Contains(err.Error(), "workspace directory must be explicitly specified via --workspace") {
+		t.Fatalf("expected error mentioning --workspace requirement, got: %v", err)
+	}
+}

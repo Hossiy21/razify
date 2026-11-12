@@ -258,7 +258,7 @@ func SampleMCPConfigCursor() string {
   "mcpServers": {
     "razify": {
       "command": "razify",
-      "args": ["mcp"]
+      "args": ["mcp", "--workspace", "${workspaceFolder}"]
     }
   }
 }`
@@ -270,7 +270,7 @@ func SampleMCPConfigClaudeDesktop() string {
   "mcpServers": {
     "razify": {
       "command": "razify",
-      "args": ["mcp"]
+      "args": ["mcp", "--workspace", "/path/to/project"]
     }
   }
 }`
@@ -282,7 +282,7 @@ func SampleMCPConfigAntigravity() string {
   "mcpServers": {
     "razify": {
       "command": "razify",
-      "args": ["mcp"]
+      "args": ["mcp", "--workspace", "${workspaceFolder}"]
     }
   }
 }`

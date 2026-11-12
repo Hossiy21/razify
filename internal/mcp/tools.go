@@ -111,15 +111,16 @@ func HandleSchemaInspect(argsRaw json.RawMessage, workspaceDir string) (CallTool
 		_ = json.Unmarshal(argsRaw, &args)
 	}
 
-	exampleFile, err := ResolveConfinedPath(workspaceDir, args.ExampleFile, ".env.example")
+	exF, exampleFile, err := OpenConfinedEnvFile(workspaceDir, args.ExampleFile, ".env.example")
 	if err != nil {
 		return CallToolResult{
 			Content: []ToolContent{{Type: "text", Text: fmt.Sprintf("Error: %v", err)}},
 			IsError: true,
 		}, nil
 	}
+	defer exF.Close()
 
-	vars, err := schema.ParseEnvWithMetadata(exampleFile)
+	vars, err := schema.ParseEnvWithMetadataReader(exF)
 	if err != nil {
 		return CallToolResult{
 			Content: []ToolContent{{Type: "text", Text: fmt.Sprintf("Error reading schema file %s: %s", filepath.Base(exampleFile), SanitizeParseError(err))}},
@@ -189,15 +190,16 @@ func HandleEnvValidateConfig(argsRaw json.RawMessage, workspaceDir string) (Call
 		}, nil
 	}
 
-	exampleFile, err := ResolveConfinedPath(workspaceDir, args.ExampleFile, ".env.example")
+	exF, exampleFile, err := OpenConfinedEnvFile(workspaceDir, args.ExampleFile, ".env.example")
 	if err != nil {
 		return CallToolResult{
 			Content: []ToolContent{{Type: "text", Text: fmt.Sprintf("Error: %v", err)}},
 			IsError: true,
 		}, nil
 	}
+	defer exF.Close()
 
-	exampleVars, err := schema.ParseEnvWithMetadata(exampleFile)
+	exampleVars, err := schema.ParseEnvWithMetadataReader(exF)
 	if err != nil {
 		return CallToolResult{
 			Content: []ToolContent{{Type: "text", Text: fmt.Sprintf("Error reading schema file %s: %s", filepath.Base(exampleFile), SanitizeParseError(err))}},
@@ -222,7 +224,34 @@ func HandleEnvValidateConfig(argsRaw json.RawMessage, workspaceDir string) (Call
 			continue
 		}
 
-		// 2. Validate value against tags
+		// 2. Secret leak scanning on submitted candidate value
+		isSecret := false
+		if IsSecretPlaceholder(ev.Key, val, ev.Tags) {
+			findings = append(findings, ConfigValidationFinding{
+				Key:     ev.Key,
+				Status:  "SECRET_LEAK",
+				Message: "Submitted candidate value matches sensitive key or secret pattern. [masked]",
+			})
+			isSecret = true
+		} else {
+			for _, r := range scanner.SecretValuePatterns {
+				if r.Pattern.MatchString(val) {
+					findings = append(findings, ConfigValidationFinding{
+						Key:     ev.Key,
+						Status:  "SECRET_LEAK",
+						Message: fmt.Sprintf("Submitted candidate value matches known secret pattern (%s). [masked]", r.Reason),
+					})
+					isSecret = true
+					break
+				}
+			}
+		}
+
+		if isSecret {
+			continue
+		}
+
+		// 3. Validate value against tags
 		if errMsg := schema.ValidateValue(val, ev.Tags, args.Config); errMsg != "" {
 			findings = append(findings, ConfigValidationFinding{
 				Key:     ev.Key,
@@ -232,23 +261,7 @@ func HandleEnvValidateConfig(argsRaw json.RawMessage, workspaceDir string) (Call
 			continue
 		}
 
-		// 3. Secret leak scanning on submitted candidate value
-		isSecret := false
-		for _, r := range scanner.SecretValuePatterns {
-			if r.Pattern.MatchString(val) {
-				findings = append(findings, ConfigValidationFinding{
-					Key:     ev.Key,
-					Status:  "SECRET_LEAK",
-					Message: fmt.Sprintf("Submitted candidate value matches known secret pattern (%s). Masked value: %s", r.Reason, scanner.MaskValue(val)),
-				})
-				isSecret = true
-				break
-			}
-		}
-
-		if !isSecret {
-			passedCount++
-		}
+		passedCount++
 	}
 
 	result := ConfigValidationResult{
@@ -282,35 +295,37 @@ func HandleEnvDiffKeys(argsRaw json.RawMessage, workspaceDir string) (CallToolRe
 		_ = json.Unmarshal(argsRaw, &args)
 	}
 
-	envFile := args.EnvFile
-	envFile, err := ResolveConfinedPath(workspaceDir, args.EnvFile, ".env")
+	exF, exampleFile, err := OpenConfinedEnvFile(workspaceDir, args.ExampleFile, ".env.example")
 	if err != nil {
 		return CallToolResult{
 			Content: []ToolContent{{Type: "text", Text: fmt.Sprintf("Error: %v", err)}},
 			IsError: true,
 		}, nil
 	}
+	defer exF.Close()
 
-	exampleFile, err := ResolveConfinedPath(workspaceDir, args.ExampleFile, ".env.example")
-	if err != nil {
-		return CallToolResult{
-			Content: []ToolContent{{Type: "text", Text: fmt.Sprintf("Error: %v", err)}},
-			IsError: true,
-		}, nil
-	}
-
-	envMap, err := schema.ParseEnvFile(envFile)
-	if err != nil && !os.IsNotExist(err) {
-		return CallToolResult{
-			Content: []ToolContent{{Type: "text", Text: fmt.Sprintf("Error reading env file %s: %s", filepath.Base(envFile), SanitizeParseError(err))}},
-			IsError: true,
-		}, nil
-	}
-
-	exampleVars, err := schema.ParseEnvWithMetadata(exampleFile)
+	exampleVars, err := schema.ParseEnvWithMetadataReader(exF)
 	if err != nil {
 		return CallToolResult{
 			Content: []ToolContent{{Type: "text", Text: fmt.Sprintf("Error reading schema file %s: %s", filepath.Base(exampleFile), SanitizeParseError(err))}},
+			IsError: true,
+		}, nil
+	}
+
+	envMap := make(map[string]string)
+	envF, envFile, err := OpenConfinedEnvFile(workspaceDir, args.EnvFile, ".env")
+	if err == nil {
+		defer envF.Close()
+		envMap, err = schema.ParseEnvReader(envF)
+		if err != nil {
+			return CallToolResult{
+				Content: []ToolContent{{Type: "text", Text: fmt.Sprintf("Error reading env file %s: %s", filepath.Base(envFile), SanitizeParseError(err))}},
+				IsError: true,
+			}, nil
+		}
+	} else if !os.IsNotExist(err) && !strings.Contains(err.Error(), "no such file") && !strings.Contains(err.Error(), "does not exist") {
+		return CallToolResult{
+			Content: []ToolContent{{Type: "text", Text: fmt.Sprintf("Error: %v", err)}},
 			IsError: true,
 		}, nil
 	}
@@ -382,24 +397,28 @@ func HandleEnvHealthAudit(argsRaw json.RawMessage, workspaceDir string) (CallToo
 		_ = json.Unmarshal(argsRaw, &args)
 	}
 
-	envFile, err := ResolveConfinedPath(workspaceDir, args.EnvFile, ".env")
+	exF, _, err := OpenConfinedEnvFile(workspaceDir, args.ExampleFile, ".env.example")
 	if err != nil {
 		return CallToolResult{
 			Content: []ToolContent{{Type: "text", Text: fmt.Sprintf("Error: %v", err)}},
 			IsError: true,
 		}, nil
 	}
+	defer exF.Close()
 
-	exampleFile, err := ResolveConfinedPath(workspaceDir, args.ExampleFile, ".env.example")
-	if err != nil {
+	exampleVars, _ := schema.ParseEnvWithMetadataReader(exF)
+
+	envMap := make(map[string]string)
+	envF, _, err := OpenConfinedEnvFile(workspaceDir, args.EnvFile, ".env")
+	if err == nil {
+		defer envF.Close()
+		envMap, _ = schema.ParseEnvReader(envF)
+	} else if !os.IsNotExist(err) && !strings.Contains(err.Error(), "no such file") && !strings.Contains(err.Error(), "does not exist") {
 		return CallToolResult{
 			Content: []ToolContent{{Type: "text", Text: fmt.Sprintf("Error: %v", err)}},
 			IsError: true,
 		}, nil
 	}
-
-	envMap, _ := schema.ParseEnvFile(envFile)
-	exampleVars, _ := schema.ParseEnvWithMetadata(exampleFile)
 
 	var missingKeys []string
 	for _, ev := range exampleVars {
@@ -419,7 +438,7 @@ func HandleEnvHealthAudit(argsRaw json.RawMessage, workspaceDir string) (CallToo
 					Key:         k,
 					Reason:      r.Reason,
 					Risk:        r.Risk,
-					MaskedValue: scanner.MaskValue(v),
+					MaskedValue: "[masked]",
 					Fingerprint: hex.EncodeToString(hash[:8]),
 				})
 				break

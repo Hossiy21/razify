@@ -6,12 +6,22 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/Hossiy21/razify/internal/mcp"
 	"github.com/Hossiy21/razify/internal/schema"
 )
+
+func skipIfSymlinkFails(t *testing.T, err error) {
+	if err != nil {
+		if runtime.GOOS == "windows" {
+			t.Skipf("skipping symlink test on Windows due to OS privilege limitations: %v", err)
+		}
+		t.Fatalf("failed to create symlink: %v", err)
+	}
+}
 
 func TestMCPServer_InitializeAndToolsList(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -270,13 +280,9 @@ func TestMCPServer_MethodNotFound(t *testing.T) {
 	}
 }
 
-// Item 1 & 2: Fail-closed path confinement tests across all path edge cases
+// Item 1, 2, 7: Fail-closed path confinement tests across all path edge cases
 func TestMCP_PathConfinement_FailClosedCases(t *testing.T) {
 	tmpDir := t.TempDir()
-	outsideDir := t.TempDir()
-
-	outsideSecret := filepath.Join(outsideDir, "secret_outside.env")
-	_ = os.WriteFile(outsideSecret, []byte("OUTSIDE=secret\n"), 0600)
 
 	// Create a subdirectory that is a directory inside workspace
 	subDir := filepath.Join(tmpDir, "sub")
@@ -285,10 +291,6 @@ func TestMCP_PathConfinement_FailClosedCases(t *testing.T) {
 	// Create a regular directory named .env (must be rejected as not a regular file)
 	dirAsEnv := filepath.Join(tmpDir, "directory.env")
 	_ = os.MkdirAll(dirAsEnv, 0755)
-
-	// Symlink pointing outside workspace
-	symlinkEscape := filepath.Join(tmpDir, "symlink_escape.env")
-	_ = os.Symlink(outsideSecret, symlinkEscape)
 
 	testCases := []struct {
 		name       string
@@ -304,9 +306,13 @@ func TestMCP_PathConfinement_FailClosedCases(t *testing.T) {
 		{name: "UNC path with forward slashes", pathArg: `//server/share/.env`, wantErrSub: "UNC path"},
 
 		// Windows drive-relative and absolute drive paths
-		{name: "drive-relative path", pathArg: "C:.env", wantErrSub: "drive-relative"},
-		{name: "absolute drive path with backslash", pathArg: `C:\secrets\.env`, wantErrSub: "drive-relative"},
-		{name: "absolute drive path with forward slash", pathArg: "D:/.env", wantErrSub: "drive-relative"},
+		{name: "drive-relative path", pathArg: "C:.env", wantErrSub: "':' is prohibited"},
+		{name: "absolute drive path with backslash", pathArg: `C:\secrets\.env`, wantErrSub: "':' is prohibited"},
+		{name: "absolute drive path with forward slash", pathArg: "D:/.env", wantErrSub: "':' is prohibited"},
+
+		// Alternate data streams (reject ':' anywhere)
+		{name: "alternate data stream .env:stream", pathArg: ".env:stream", wantErrSub: "':' is prohibited"},
+		{name: "alternate data stream DATA", pathArg: ".env::$DATA", wantErrSub: "':' is prohibited"},
 
 		// Windows reserved device names
 		{name: "reserved name NUL", pathArg: "NUL", wantErrSub: "reserved Windows device name"},
@@ -348,19 +354,8 @@ func TestMCP_PathConfinement_FailClosedCases(t *testing.T) {
 		})
 	}
 
-	// Symlink escape test
-	if _, err := os.Stat(symlinkEscape); err == nil {
-		_, err := mcp.ResolveConfinedPath(tmpDir, "symlink_escape.env", ".env.example")
-		if err == nil {
-			t.Fatalf("expected symlink escape to be rejected, but it succeeded")
-		}
-		if !strings.Contains(err.Error(), "escapes") && !strings.Contains(err.Error(), "symlink") {
-			t.Errorf("expected symlink escape error, got: %v", err)
-		}
-	}
-
-	// Allowed basenames test
-	validFiles := []string{".env", ".env.example", ".env.local", ".env.production", "local.env", "staging.env"}
+	// Allowed basenames test (including ..env)
+	validFiles := []string{".env", ".env.example", ".env.local", ".env.production", "local.env", "staging.env", "..env"}
 	for _, vf := range validFiles {
 		t.Run("allowed_"+vf, func(t *testing.T) {
 			filePath := filepath.Join(tmpDir, vf)
@@ -387,7 +382,69 @@ func TestMCP_PathConfinement_FailClosedCases(t *testing.T) {
 	}
 }
 
-// Item 2: Workspace validation tests (refuse /, drive roots, home directory)
+// Item 1 & 7: Symlink bypasses, chains, in-workspace .git/config target, and dangling symlinks
+func TestMCP_Symlinks_BypassesAndChains(t *testing.T) {
+	tmpDir := t.TempDir()
+	outsideDir := t.TempDir()
+
+	outsideSecret := filepath.Join(outsideDir, "secret_outside.env")
+	_ = os.WriteFile(outsideSecret, []byte("OUTSIDE=secret\n"), 0600)
+
+	// In-workspace sensitive non-env file
+	gitDir := filepath.Join(tmpDir, ".git")
+	_ = os.MkdirAll(gitDir, 0755)
+	gitConfig := filepath.Join(gitDir, "config")
+	_ = os.WriteFile(gitConfig, []byte("[core]\n\trepositoryformatversion = 0\n"), 0644)
+
+	// 1. Symlink named .env pointing to .git/config (CRITICAL BYPASS TEST)
+	symlinkToGitConfig := filepath.Join(tmpDir, "symlink_git.env")
+	err := os.Symlink(gitConfig, symlinkToGitConfig)
+	skipIfSymlinkFails(t, err)
+
+	_, err = mcp.ResolveConfinedPath(tmpDir, "symlink_git.env", ".env.example")
+	if err == nil {
+		t.Fatalf("SECURITY VIOLATION: symlink pointing to .git/config was allowed!")
+	}
+	if !strings.Contains(err.Error(), "symlink") && !strings.Contains(err.Error(), "basename") {
+		t.Errorf("expected symlink or basename rejection, got: %v", err)
+	}
+
+	// 2. Symlink pointing outside workspace
+	symlinkEscape := filepath.Join(tmpDir, "symlink_escape.env")
+	_ = os.Symlink(outsideSecret, symlinkEscape)
+	_, err = mcp.ResolveConfinedPath(tmpDir, "symlink_escape.env", ".env.example")
+	if err == nil {
+		t.Fatalf("expected symlink escape to be rejected, but it succeeded")
+	}
+
+	// 3. Symlink chain: link1.env -> link2.env -> outsideSecret
+	link2 := filepath.Join(tmpDir, "link2.env")
+	_ = os.Symlink(outsideSecret, link2)
+	link1 := filepath.Join(tmpDir, "link1.env")
+	_ = os.Symlink(link2, link1)
+	_, err = mcp.ResolveConfinedPath(tmpDir, "link1.env", ".env.example")
+	if err == nil {
+		t.Fatalf("expected symlink chain to outside to be rejected, but it succeeded")
+	}
+
+	// 4. Dangling symlink
+	danglingLink := filepath.Join(tmpDir, "dangling.env")
+	_ = os.Symlink(filepath.Join(tmpDir, "does_not_exist.env"), danglingLink)
+	_, err = mcp.ResolveConfinedPath(tmpDir, "dangling.env", ".env.example")
+	if err == nil {
+		t.Fatalf("expected dangling symlink to be rejected, but it succeeded")
+	}
+
+	// 5. Symlinked parent directory pointing outside with non-existent child
+	symlinkedParent := filepath.Join(tmpDir, "parent_link")
+	_ = os.Symlink(outsideDir, symlinkedParent)
+	_, err = mcp.ResolveConfinedPath(tmpDir, "parent_link/child.env", ".env.example")
+	if err == nil {
+		t.Fatalf("expected symlinked parent directory with child to be rejected, but it succeeded")
+	}
+}
+
+// Item 2, 4, 7: Workspace validation tests (refuse /, drive roots, home directory, ancestor of home)
 func TestMCP_WorkspaceValidation(t *testing.T) {
 	// 1. Refuse empty workspace
 	if _, err := mcp.ValidateWorkspaceDir(""); err == nil {
@@ -410,10 +467,17 @@ func TestMCP_WorkspaceValidation(t *testing.T) {
 		t.Errorf("expected C: drive root to be rejected")
 	}
 
-	// 4. Refuse user home directory
+	// 4. Refuse user home directory and ancestor of home
 	if homeDir, err := os.UserHomeDir(); err == nil && homeDir != "" {
 		if _, err := mcp.ValidateWorkspaceDir(homeDir); err == nil {
 			t.Errorf("expected user home directory to be rejected")
+		}
+
+		homeParent := filepath.Dir(homeDir)
+		if homeParent != "" && homeParent != homeDir {
+			if _, err := mcp.ValidateWorkspaceDir(homeParent); err == nil {
+				t.Errorf("expected home directory ancestor %q to be rejected", homeParent)
+			}
 		}
 	}
 
@@ -425,6 +489,55 @@ func TestMCP_WorkspaceValidation(t *testing.T) {
 	}
 	if validWs == "" {
 		t.Errorf("expected non-empty canonical workspace path")
+	}
+}
+
+// Item 3: File open handle & 1 MB cap enforcement
+func TestMCP_OpenConfinedEnvFile_1MBCap(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// 1. Regular valid file under 1MB opens and stats cleanly
+	validFile := filepath.Join(tmpDir, ".env")
+	_ = os.WriteFile(validFile, []byte("TEST=1\n"), 0644)
+	f, path, err := mcp.OpenConfinedEnvFile(tmpDir, ".env", ".env.example")
+	if err != nil {
+		t.Fatalf("expected OpenConfinedEnvFile to succeed, got: %v", err)
+	}
+	f.Close()
+	if path == "" {
+		t.Errorf("expected non-empty resolved path")
+	}
+
+	// 2. Oversized file (> 1MB) must be rejected
+	largeFile := filepath.Join(tmpDir, "large.env")
+	largeData := bytes.Repeat([]byte("A=1\n"), 300000) // ~1.2 MB
+	_ = os.WriteFile(largeFile, largeData, 0644)
+
+	_, _, err = mcp.OpenConfinedEnvFile(tmpDir, "large.env", ".env.example")
+	if err == nil {
+		t.Fatalf("expected file > 1MB to be rejected, but it succeeded")
+	}
+	if !strings.Contains(err.Error(), "exceeds maximum allowed size") {
+		t.Errorf("expected 1MB cap error, got: %v", err)
+	}
+}
+
+// Item 7: /work vs /work-evil prefix bypass test
+func TestMCP_WorkVsWorkEvil(t *testing.T) {
+	parentDir := t.TempDir()
+	workDir := filepath.Join(parentDir, "work")
+	workEvilDir := filepath.Join(parentDir, "work-evil")
+	_ = os.MkdirAll(workDir, 0755)
+	_ = os.MkdirAll(workEvilDir, 0755)
+
+	evilFile := filepath.Join(workEvilDir, ".env")
+	_ = os.WriteFile(evilFile, []byte("EVIL=true\n"), 0644)
+
+	// Attempt to access /work-evil/.env with workspace set to /work
+	relPath, _ := filepath.Rel(workDir, evilFile)
+	_, err := mcp.ResolveConfinedPath(workDir, relPath, ".env.example")
+	if err == nil {
+		t.Fatalf("SECURITY VIOLATION: /work-evil was treated as within /work!")
 	}
 }
 
@@ -491,7 +604,7 @@ func TestMCP_ParserAndSanitizeParseError_Canaries(t *testing.T) {
 	}
 }
 
-// Item 4: IsSecretPlaceholder per-charset entropy, URL-userinfo, and extended key names
+// Item 4, 6: IsSecretPlaceholder per-charset entropy, URL-userinfo, and extended key names
 func TestMCP_IsSecretPlaceholder_EntropyAndHeuristics(t *testing.T) {
 	// 1. Hex per-charset entropy (len >= 32, entropy >= 3.0)
 	highEntropyHex := "d41d8cd98f00b204e9800998ecf8427e" // 32 hex chars, entropy ~3.5
@@ -511,10 +624,14 @@ func TestMCP_IsSecretPlaceholder_EntropyAndHeuristics(t *testing.T) {
 		t.Errorf("expected short hex (<32 chars) to NOT be flagged under hex entropy rule")
 	}
 
-	// 2. Base64-like per-charset entropy (len >= 20, entropy >= 4.0)
-	highEntropyBase64 := "xK9mQ4vL2pW8zN7bT1jR5aC3dE" // 26 chars, high entropy > 4.2
-	if !mcp.IsSecretPlaceholder("CONFIG_VAL", highEntropyBase64, nil) {
-		t.Errorf("expected high-entropy base64 (20+ chars, entropy >= 4.0) to be flagged as secret")
+	// 2. Base64-like per-charset entropy (len >= 32 entropy >= 4.0; 20 <= len < 32 entropy >= 4.3)
+	highEntropyBase64Long := "xK9mQ4vL2pW8zN7bT1jR5aC3dE6gH0yU" // 32 chars, entropy > 4.5
+	if !mcp.IsSecretPlaceholder("CONFIG_VAL", highEntropyBase64Long, nil) {
+		t.Errorf("expected high-entropy base64 (32 chars) to be flagged as secret")
+	}
+	highEntropyBase64Short := "xK9mQ4vL2pW8zN7bT1jR5aC3" // 24 chars, high entropy > 4.3
+	if !mcp.IsSecretPlaceholder("CONFIG_VAL", highEntropyBase64Short, nil) {
+		t.Errorf("expected high-entropy base64 (24 chars) to be flagged as secret")
 	}
 	regularIdentifier := "my_long_normal_variable_name" // 29 chars, English words, entropy < 3.8
 	if mcp.IsSecretPlaceholder("CONFIG_VAL", regularIdentifier, nil) {

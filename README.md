@@ -291,7 +291,7 @@ Create or edit `.cursor/mcp.json` in your workspace:
   "mcpServers": {
     "razify": {
       "command": "razify",
-      "args": ["mcp"]
+      "args": ["mcp", "--workspace", "${workspaceFolder}"]
     }
   }
 }
@@ -304,7 +304,7 @@ Add to `claude_desktop_config.json`:
   "mcpServers": {
     "razify": {
       "command": "razify",
-      "args": ["mcp"]
+      "args": ["mcp", "--workspace", "/path/to/project"]
     }
   }
 }
@@ -317,7 +317,7 @@ Add to your project or global `mcp_config.json`:
   "mcpServers": {
     "razify": {
       "command": "razify",
-      "args": ["mcp"]
+      "args": ["mcp", "--workspace", "${workspaceFolder}"]
     }
   }
 }
