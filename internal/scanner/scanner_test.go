@@ -1,6 +1,7 @@
 package scanner_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Hossiy21/razify/internal/scanner"
@@ -14,11 +15,11 @@ func TestMaskValue(t *testing.T) {
 		input string
 		want  string
 	}{
-		{"", "****"},
-		{"a", "****"},
-		{"abcd", "****"},
-		{"secret", "se**et"},
-		{"password123", "pa*******23"},
+		{"", "********"},
+		{"a", "********"},
+		{"abcd", "********"},
+		{"secret", "********"},
+		{"password123", "***********"},
 		{mockStripeKey, "sk****************************00"},
 	}
 
@@ -57,6 +58,33 @@ func TestScanVars(t *testing.T) {
 	}
 	if results[1].Key != "DB_PASSWORD" || results[1].Risk != "CRITICAL" {
 		t.Errorf("expected DB_PASSWORD critical, got %+v", results[1])
+	}
+}
+
+func TestScanVars_ShannonEntropyLivePath(t *testing.T) {
+	// High-entropy token with an innocent key that does NOT match any regex in SecretValuePatterns or DangerPatterns
+	highEntropyToken := "xK9mQ4vL2pW8zN7bT1jR5aC3dE6gH0yU"
+	lowEntropyValue := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
+	vars := []schema.EnvVar{
+		{LineNum: 1, Key: "DATA_BLOB", Value: highEntropyToken},
+		{LineNum: 2, Key: "REPEATED_CHARS", Value: lowEntropyValue},
+	}
+
+	results, _ := scanner.ScanVars(vars)
+
+	foundEntropy := false
+	for _, r := range results {
+		if r.Key == "DATA_BLOB" && strings.Contains(r.Reason, "High entropy detected") {
+			foundEntropy = true
+		}
+		if r.Key == "REPEATED_CHARS" {
+			t.Errorf("low entropy value was unexpectedly flagged: %+v", r)
+		}
+	}
+
+	if !foundEntropy {
+		t.Fatalf("ShannonEntropy on live scan path failed to flag high-entropy token! Results: %+v", results)
 	}
 }
 

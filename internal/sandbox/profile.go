@@ -41,13 +41,14 @@ func GetProfileConfig(profileName string) ProfileConfig {
 			Name:         "go",
 			DefaultImage: "golang:1.25-alpine",
 			EnvVars: map[string]string{
-				"GOCACHE":     "/cache/go/build",
-				"GOMODCACHE":  "/cache/go/mod",
+				"HOME":       "/home/razify",
+				"GOCACHE":    "/cache/go/build",
+				"GOMODCACHE": "/cache/go/mod",
 			},
 			DefaultTmpfs: []string{
-				"/tmp:rw,exec,nosuid,size=512m",
-				"/cache:rw,exec,nosuid,size=1g",
-				"/home/razify:rw,exec,nosuid,size=256m",
+				"/tmp:rw,exec,nosuid,size=512m,uid=1000,gid=1000,mode=1777",
+				"/cache:rw,exec,nosuid,size=1g,uid=1000,gid=1000,mode=1777",
+				"/home/razify:rw,exec,nosuid,size=256m,uid=1000,gid=1000,mode=0700",
 			},
 		}
 	case "node":
@@ -55,13 +56,14 @@ func GetProfileConfig(profileName string) ProfileConfig {
 			Name:         "node",
 			DefaultImage: "node:22-alpine",
 			EnvVars: map[string]string{
-				"npm_config_cache":          "/cache/npm",
+				"HOME":                        "/home/razify",
+				"npm_config_cache":           "/cache/npm",
 				"npm_config_update_notifier": "false",
 			},
 			DefaultTmpfs: []string{
-				"/tmp:rw,exec,nosuid,size=512m",
-				"/cache:rw,exec,nosuid,size=1g",
-				"/home/razify:rw,exec,nosuid,size=256m",
+				"/tmp:rw,exec,nosuid,size=512m,uid=1000,gid=1000,mode=1777",
+				"/cache:rw,exec,nosuid,size=1g,uid=1000,gid=1000,mode=1777",
+				"/home/razify:rw,exec,nosuid,size=256m,uid=1000,gid=1000,mode=0700",
 			},
 		}
 	case "python":
@@ -69,23 +71,27 @@ func GetProfileConfig(profileName string) ProfileConfig {
 			Name:         "python",
 			DefaultImage: "python:3.12-alpine",
 			EnvVars: map[string]string{
+				"HOME":                "/home/razify",
 				"PYTHONPYCACHEPREFIX": "/cache/python/pycache",
 				"PIP_CACHE_DIR":       "/cache/python/pip",
 			},
 			DefaultTmpfs: []string{
-				"/tmp:rw,exec,nosuid,size=512m",
-				"/cache:rw,exec,nosuid,size=1g",
-				"/home/razify:rw,exec,nosuid,size=256m",
+				"/tmp:rw,exec,nosuid,size=512m,uid=1000,gid=1000,mode=1777",
+				"/cache:rw,exec,nosuid,size=1g,uid=1000,gid=1000,mode=1777",
+				"/home/razify:rw,exec,nosuid,size=256m,uid=1000,gid=1000,mode=0700",
 			},
 		}
 	default:
 		return ProfileConfig{
 			Name:         "generic",
 			DefaultImage: "alpine:latest",
-			EnvVars:      map[string]string{},
+			EnvVars: map[string]string{
+				"HOME": "/home/razify",
+			},
 			DefaultTmpfs: []string{
-				"/tmp:rw,exec,nosuid,size=256m",
-				"/home/razify:rw,exec,nosuid,size=256m",
+				"/tmp:rw,exec,nosuid,size=256m,uid=1000,gid=1000,mode=1777",
+				"/cache:rw,exec,nosuid,size=512m,uid=1000,gid=1000,mode=1777",
+				"/home/razify:rw,exec,nosuid,size=256m,uid=1000,gid=1000,mode=0700",
 			},
 		}
 	}

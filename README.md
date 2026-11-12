@@ -7,7 +7,7 @@
 **The Agent-Safe Configuration & Environment Engine.**
 
 Type-safe schema compliance, containerized command containment, secret leak shielding, and Model Context Protocol (MCP) diagnostics for developers and autonomous AI coding agents.  
-Sub-10ms performance. 100% offline-first. Zero cloud dependency. Every language.
+Sub-10ms performance. Fully offline-first. Zero cloud dependency. Multi-language support.
 
 [![npm version](https://img.shields.io/npm/v/razify.svg?color=6C63FF&style=flat-square)](https://www.npmjs.com/package/razify)
 [![VS Code Extension](https://img.shields.io/badge/VS_Code-vscode--razify-blue?style=flat-square&logo=visualstudiocode)](https://github.com/Hossiy21/razify)
@@ -69,7 +69,7 @@ Every engineering team loses hours to broken `.env` files:
 | 🎨 **VS Code Extension** | `vscode-razify` | Real-time red/yellow squigglies, hover tooltips & auto-completions. |
 | 🛡️ **Git Pre-Commit Guard** | `razify guard` | Sub-10ms pre-commit git hook blocking broken or insecure commits. |
 | 🤖 **Agent MCP Server** | `razify mcp` | JSON-RPC 2.0 stdio server providing safe schema inspection for Cursor, Claude Desktop & Antigravity without secret leakage. |
-| 🛡️ **Agent Policy Guard** | `razify guard --agent` | Shields `.env` files from AI coding assistants and enforces `AGENTS.md` policy directives. |
+| 🛡️ **Agent Policy Guard** | `razify guard --agent` | Configures `.gitignore`, `AGENTS.md` (advisory), and native agent deny rules (`.cursorignore`, `.claude/settings.json`, `.aiderignore`) to steer AI coding agents toward MCP tools. |
 | 🤖 **GitHub Action** | `action.yml` | 1-step CI/CD Pull Request enforcement gate. |
 | 🔄 **Environment Diffing** | `razify diff` | Compare `.env` files side-by-side. |
 | 💡 **Auto-Fixer** | `razify fix` | Automatically sync missing template keys into `.env`. |
@@ -81,24 +81,24 @@ Every engineering team loses hours to broken `.env` files:
 
 ## ⚡ Performance Benchmarks & Ecosystem Comparison
 
-Razify is engineered from the ground up for sub-10ms CLI responsiveness, minimal memory footprint, and 100% offline-first execution:
+Razify is engineered from the ground up for sub-10ms CLI responsiveness, minimal memory footprint, and offline-by-default execution. Measured on a 100-variable fixture using `hyperfine -N -i --warmup 20 -m 50` (no intermediate shell) and `/usr/bin/time -v` on Linux x86_64:
 
-| Capability / Benchmark | **Razify v2.0** | **dotenv-linter** | **gitleaks** |
+| Capability / Benchmark | **Razify v2.0** (`razify check`) | **dotenv-linter** (`dotenv-linter .env`) | **gitleaks** (`gitleaks dir --no-git .`) |
 |---|---|---|---|
-| **Single-Pass Check Time** | **5.25 ms** | ~18.40 ms | ~46.80 ms |
+| **Execution Time (mean ± σ)** | **4.6 ms ± 0.6 ms** | **595.8 µs ± 79.1 µs** | **269.2 ms ± 34.1 ms** |
+| **Peak Memory Footprint (RSS)** | **8.46 MB** (8,660 KB) | **1.94 MB** (1,984 KB) | **44.74 MB** (45,812 KB) |
 | **Workspace Doctor Health Check** | **6.90 ms** (`--fast`) | ❌ *Unsupported* | ❌ *Unsupported* |
-| **Peak Memory Footprint (RSS)** | **17.7 MB** | ~22.1 MB | ~58.4 MB |
 | **Type & Range Schema Enforcement** | **Yes** (`@type`, `@range`, `@enum`) | ❌ *Unsupported* | ❌ *Unsupported* |
 | **Variable Dependency Checks** | **Yes** (`@requires`) | ❌ *Unsupported* | ❌ *Unsupported* |
-| **Secret Scanning & Entropy Analysis** | **Yes** (Entropy + Danger Patterns) | ❌ *Unsupported* | **Yes** (Regex only) |
+| **Secret Scanning & Entropy Analysis** | **Yes** (Entropy + Patterns) | ❌ *Unsupported* | **Yes** (Regex + Entropy) |
 | **Autonomous Container Sandbox** | **Yes** (`razify run --sandbox`) | ❌ *Unsupported* | ❌ *Unsupported* |
 | **Model Context Protocol (MCP)** | **Yes** (`razify mcp` stdio server) | ❌ *Unsupported* | ❌ *Unsupported* |
-| **Agent Guard & `AGENTS.md` Policy** | **Yes** (`razify guard --agent`) | ❌ *Unsupported* | ❌ *Unsupported* |
+| **Agent Guard & Native Deny Files** | **Yes** (`razify guard --agent`) | ❌ *Unsupported* | ❌ *Unsupported* |
 | **AST Source Code Auto-Discovery** | **Yes** (`razify init --from-code`) | ❌ *Unsupported* | ❌ *Unsupported* |
 | **OASIS SARIF v2.1.0 Export** | **Yes** (`--sarif`) | ❌ *Unsupported* | **Yes** (`--report-format sarif`) |
-| **100% Offline-First Architecture** | **Yes** (Zero telemetry/cloud calls) | **Yes** | **Yes** |
+| **Offline-by-Default Architecture** | **Yes** (Zero background calls) | **Yes** | **Yes** |
 
-Detailed microbenchmark allocations and reproduction steps are available in [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
+Razify operates offline-by-default with zero background telemetry or cloud phoning-home. Outbound network communication is strictly confined to 4 explicit opt-in scenarios: `razify version --check`, npm binary wrapper downloads, `--probe-remote` doctor checks, and container image pulls via the host Docker daemon. Full methodology and reproduction instructions are in [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
 
 ---
 
@@ -267,10 +267,11 @@ razify guard install --agent
 razify guard uninstall --agent
 ```
 
-When installed, Razify Agent Guard ensures:
-- `.env` and `.env.*` patterns are strictly ignored in `.gitignore`.
-- An `AGENTS.md` policy block is installed directing coding agents to use Razify MCP tools rather than reading `.env` directly.
-- Git pre-commit hooks verify that no secret files are tracked in the git index (`git ls-files`).
+When installed, Razify Agent Guard configures:
+- `.gitignore`: strictly ignores `.env` and `.env.*` (advisory barrier preventing accidental git commits).
+- **Native Agent Deny Rules**: installs `.cursorignore`, `.aiderignore`, `.claudeignore`, and native Claude Code permissions in `.claude/settings.json` preventing AI coding tools from indexing or reading secret files.
+- **`AGENTS.md`**: installs an advisory policy block steering AI coding assistants to use Razify MCP tools rather than reading `.env` directly.
+- **Git Pre-Commit Hook** (`razify guard install`): executes `razify check --quiet` before every commit, blocking commits containing missing required variables, schema violations, or leaked high-entropy secrets.
 
 ### 🔌 2. Model Context Protocol Server (`razify mcp`)
 
@@ -279,7 +280,7 @@ When installed, Razify Agent Guard ensures:
 - 🔍 **`schema_inspect`**: Inspects required keys, types (`@type`), enumeration sets (`@enum`), ranges (`@range`), and documentation from `.env.example`. Never opens or exposes raw `.env` secrets.
 - 🧪 **`env_validate_config`**: Hermetically validates candidate key-value maps against schema rules in memory without touching disk, automatically masking secret-typed values in diagnostics.
 - 🔄 **`env_diff_keys`**: Compares key names between `.env` and `.env.example` to identify missing or untracked keys with strictly zero value exposure.
-- 🩺 **`env_health_audit`**: Computes project environment configuration health scores (0-100) and schema violations, automatically fingerprinting (SHA-256) or masking secret values.
+- 🩺 **`env_health_audit`**: Computes project environment configuration health scores (0-100) and schema violations, automatically masking secret values.
 
 ### ⚙️ Connecting Razify MCP to Your AI Tools
 
@@ -290,7 +291,7 @@ Create or edit `.cursor/mcp.json` in your workspace:
   "mcpServers": {
     "razify": {
       "command": "razify",
-      "args": ["mcp"]
+      "args": ["mcp", "--workspace", "${workspaceFolder}"]
     }
   }
 }
@@ -303,7 +304,7 @@ Add to `claude_desktop_config.json`:
   "mcpServers": {
     "razify": {
       "command": "razify",
-      "args": ["mcp"]
+      "args": ["mcp", "--workspace", "/path/to/project"]
     }
   }
 }
@@ -316,7 +317,7 @@ Add to your project or global `mcp_config.json`:
   "mcpServers": {
     "razify": {
       "command": "razify",
-      "args": ["mcp"]
+      "args": ["mcp", "--workspace", "${workspaceFolder}"]
     }
   }
 }
@@ -340,7 +341,7 @@ razify init --from-code -d ./services/backend -o ./services/backend/.env.example
 - **Go (`go/ast`)**: Inspects AST call expressions detecting `os.Getenv`, `os.LookupEnv`, and `os.Setenv`. Determines types from context such as `strconv.Atoi` (`int`/`port`) and `strconv.ParseBool` (`bool`).
 - **TypeScript & JavaScript**: Discovers `process.env.KEY`, `process.env['KEY']`, and `import.meta.env.KEY`. Extracts fallback default values (`|| 'default'`, `?? 'default'`) and parses `parseInt` / `Boolean` contexts.
 - **Python**: Scans `os.getenv('KEY', 'default')`, `os.environ.get(...)`, and direct bracket indexing `os.environ['KEY']` (marking missing keys as `@required`).
-- **Intelligent Deduplication & Schema Annotations**: Merges multiple occurrences across languages, infers `@type` annotations (`port`, `url`, `secret`, `bool`, `email`, `int`), categorizes into clear sections, and guarantees 100% compliance with `razify check`.
+- **Intelligent Deduplication & Schema Annotations**: Merges multiple occurrences across languages, infers `@type` annotations (`port`, `url`, `secret`, `bool`, `email`, `int`), categorizes into clear sections, and generates schemas ready for validation with `razify check`.
 
 ---
 

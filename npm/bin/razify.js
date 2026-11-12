@@ -82,6 +82,20 @@ function isExecutableFile(p) {
 // ---------------------------------------------------------------------------
 
 function httpsGetFollow(url, redirectsLeft, onResponse, onError) {
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch (err) {
+    onError(err);
+    return;
+  }
+
+  // Enforce HTTPS only (reject unencrypted http: or other protocols)
+  if (parsed.protocol !== "https:") {
+    onError(new Error(`Insecure download protocol rejected: ${url} (HTTPS required)`));
+    return;
+  }
+
   const req = https.get(
     url,
     { headers: { "User-Agent": `razify-npm-wrapper/${VERSION}` }, timeout: DOWNLOAD_TIMEOUT_MS },
@@ -92,9 +106,13 @@ function httpsGetFollow(url, redirectsLeft, onResponse, onError) {
           onError(new Error("Too many redirects while downloading release asset"));
           return;
         }
-        // Resolve relative Location headers against the previous URL.
-        const nextUrl = new URL(res.headers.location, url).toString();
-        httpsGetFollow(nextUrl, redirectsLeft - 1, onResponse, onError);
+        // Resolve relative Location headers against the previous URL and verify HTTPS
+        const nextUrl = new URL(res.headers.location, url);
+        if (nextUrl.protocol !== "https:") {
+          onError(new Error(`Insecure redirect rejected: ${nextUrl.toString()} (HTTPS required)`));
+          return;
+        }
+        httpsGetFollow(nextUrl.toString(), redirectsLeft - 1, onResponse, onError);
         return;
       }
       if (res.statusCode !== 200) {
@@ -187,8 +205,7 @@ async function verifyChecksum(archivePath, archiveName) {
   try {
     checksumsText = await withRetries(() => fetchText(checksumsUrl), "Fetching checksums.txt");
   } catch (err) {
-    console.warn(`\x1b[33m⚠ Checksum file unavailable (${err.message}). Skipping hash check.\x1b[0m`);
-    return;
+    throw new Error(`CRITICAL: Checksum file unavailable from ${checksumsUrl} (${err.message}). Refusing to install unverified binary.`);
   }
 
   const line = checksumsText
@@ -197,8 +214,7 @@ async function verifyChecksum(archivePath, archiveName) {
     .find((l) => l.endsWith(archiveName));
 
   if (!line) {
-    console.warn(`\x1b[33m⚠ No checksum entry found for ${archiveName}. Skipping hash check.\x1b[0m`);
-    return;
+    throw new Error(`CRITICAL: No checksum entry found for ${archiveName} in ${checksumsUrl}. Refusing to install unverified binary.`);
   }
 
   const expected = line.split(/\s+/)[0].toLowerCase();
@@ -206,8 +222,8 @@ async function verifyChecksum(archivePath, archiveName) {
 
   if (expected !== actual) {
     throw new Error(
-      `Checksum mismatch for ${archiveName}\n  expected: ${expected}\n  actual:   ${actual}\n` +
-      `The downloaded file may be corrupted or tampered with. Aborting.`
+      `CRITICAL: Checksum mismatch for ${archiveName}!\n  expected: ${expected}\n  actual:   ${actual}\n` +
+      `The downloaded binary archive has been corrupted or tampered with. Aborting execution.`
     );
   }
 }

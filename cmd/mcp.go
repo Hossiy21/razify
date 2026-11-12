@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"os"
 
 	"github.com/Hossiy21/razify/internal/mcp"
@@ -17,15 +18,20 @@ without ever exposing raw production secret values.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		workspace, _ := cmd.Flags().GetString("workspace")
 		if workspace == "" {
-			workspace = "."
+			return errors.New("workspace directory must be explicitly specified via --workspace")
 		}
 
-		server := mcp.NewServer(workspace, os.Stdin, os.Stdout, os.Stderr, CurrentVersion)
+		validWs, err := mcp.ValidateWorkspaceDir(workspace)
+		if err != nil {
+			return err
+		}
+
+		server := mcp.NewServer(validWs, os.Stdin, os.Stdout, os.Stderr, CurrentVersion)
 		return server.Serve()
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(mcpCmd)
-	mcpCmd.Flags().StringP("workspace", "w", ".", "Workspace directory for environment and schema inspection")
+	mcpCmd.Flags().StringP("workspace", "w", "", "Workspace directory for environment and schema inspection (required)")
 }

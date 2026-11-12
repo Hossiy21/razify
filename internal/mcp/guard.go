@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -188,13 +189,175 @@ func UninstallAgentPolicy(repoRoot string) (bool, error) {
 	return true, nil
 }
 
+// AgentIgnoreFileList returns the slice of native agent ignore files.
+var AgentIgnoreFileList = []string{".cursorignore", ".claudeignore", ".aiderignore"}
+
+const AgentIgnoreContent = `# Protected by Razify Agent Guard
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+`
+
+// EnsureAgentIgnoreFiles creates or updates .cursorignore, .claudeignore, and .aiderignore,
+// as well as native Claude Code permissions in .claude/settings.json.
+func EnsureAgentIgnoreFiles(repoRoot string) ([]string, error) {
+	var createdOrUpdated []string
+	for _, filename := range AgentIgnoreFileList {
+		p := filepath.Join(repoRoot, filename)
+		data, err := os.ReadFile(p)
+		if os.IsNotExist(err) {
+			if err := os.WriteFile(p, []byte(AgentIgnoreContent), 0644); err != nil {
+				return createdOrUpdated, fmt.Errorf("failed to create %s: %w", filename, err)
+			}
+			createdOrUpdated = append(createdOrUpdated, filename)
+			continue
+		} else if err != nil {
+			return createdOrUpdated, fmt.Errorf("failed to read %s: %w", filename, err)
+		}
+
+		content := string(data)
+		if !strings.Contains(content, ".env") {
+			var sb strings.Builder
+			sb.WriteString(content)
+			if !strings.HasSuffix(content, "\n") {
+				sb.WriteString("\n")
+			}
+			sb.WriteString("\n" + AgentIgnoreContent)
+			if err := os.WriteFile(p, []byte(sb.String()), 0644); err != nil {
+				return createdOrUpdated, fmt.Errorf("failed to update %s: %w", filename, err)
+			}
+			createdOrUpdated = append(createdOrUpdated, filename)
+		}
+	}
+
+	// Also configure Claude Code native permissions in .claude/settings.json
+	if updated, err := EnsureClaudeSettings(repoRoot); err == nil && updated {
+		createdOrUpdated = append(createdOrUpdated, ".claude/settings.json")
+	}
+
+	return createdOrUpdated, nil
+}
+
+// EnsureClaudeSettings configures .claude/settings.json with permissions.deny rules for .env files.
+func EnsureClaudeSettings(repoRoot string) (bool, error) {
+	claudeDir := filepath.Join(repoRoot, ".claude")
+	settingsPath := filepath.Join(claudeDir, "settings.json")
+	requiredDenies := []string{"Read(./.env)", "Read(./.env.*)", "Read(./*.env)"}
+
+	data, err := os.ReadFile(settingsPath)
+	if os.IsNotExist(err) {
+		if err := os.MkdirAll(claudeDir, 0755); err != nil {
+			return false, err
+		}
+		raw := map[string]any{
+			"permissions": map[string]any{
+				"deny": requiredDenies,
+			},
+		}
+		out, err := json.MarshalIndent(raw, "", "  ")
+		if err != nil {
+			return false, err
+		}
+		return true, os.WriteFile(settingsPath, append(out, '\n'), 0644)
+	} else if err != nil {
+		return false, err
+	}
+
+	var parsed map[string]any
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		return false, err
+	}
+
+	perms, ok := parsed["permissions"].(map[string]any)
+	if !ok || perms == nil {
+		perms = make(map[string]any)
+		parsed["permissions"] = perms
+	}
+
+	existingDenyList, _ := perms["deny"].([]any)
+	denySet := make(map[string]bool)
+	for _, item := range existingDenyList {
+		if s, ok := item.(string); ok {
+			denySet[s] = true
+		}
+	}
+
+	changed := false
+	for _, req := range requiredDenies {
+		if !denySet[req] {
+			existingDenyList = append(existingDenyList, req)
+			changed = true
+		}
+	}
+
+	if changed {
+		perms["deny"] = existingDenyList
+		out, err := json.MarshalIndent(parsed, "", "  ")
+		if err != nil {
+			return false, err
+		}
+		return true, os.WriteFile(settingsPath, append(out, '\n'), 0644)
+	}
+
+	return false, nil
+}
+
+// RemoveAgentIgnoreFiles removes or cleans up agent ignore files created by Razify.
+func RemoveAgentIgnoreFiles(repoRoot string) ([]string, error) {
+	var removed []string
+	for _, filename := range AgentIgnoreFileList {
+		p := filepath.Join(repoRoot, filename)
+		data, err := os.ReadFile(p)
+		if err != nil {
+			continue
+		}
+
+		content := strings.TrimSpace(string(data))
+		// If the file only contains our ignore content or .env rules, remove it
+		if strings.TrimSpace(content) == strings.TrimSpace(AgentIgnoreContent) {
+			_ = os.Remove(p)
+			removed = append(removed, filename)
+		}
+	}
+
+	// Clean up .claude/settings.json if it was solely configured by Razify
+	claudeDir := filepath.Join(repoRoot, ".claude")
+	settingsPath := filepath.Join(claudeDir, "settings.json")
+	if data, err := os.ReadFile(settingsPath); err == nil {
+		var parsed map[string]any
+		if err := json.Unmarshal(data, &parsed); err == nil {
+			if perms, ok := parsed["permissions"].(map[string]any); ok && len(parsed) == 1 {
+				if denyList, ok := perms["deny"].([]any); ok && len(perms) == 1 {
+					onlyRazify := true
+					for _, item := range denyList {
+						s, _ := item.(string)
+						if s != "Read(./.env)" && s != "Read(./.env.*)" && s != "Read(./*.env)" {
+							onlyRazify = false
+							break
+						}
+					}
+					if onlyRazify {
+						_ = os.Remove(settingsPath)
+						_ = os.Remove(claudeDir)
+						removed = append(removed, ".claude/settings.json")
+					}
+				}
+			}
+		}
+	}
+
+	return removed, nil
+}
+
 // SampleMCPConfigCursor returns formatted JSON config for Cursor (.cursor/mcp.json).
 func SampleMCPConfigCursor() string {
 	return `{
   "mcpServers": {
     "razify": {
       "command": "razify",
-      "args": ["mcp"]
+      "args": ["mcp", "--workspace", "${workspaceFolder}"]
     }
   }
 }`
@@ -206,7 +369,7 @@ func SampleMCPConfigClaudeDesktop() string {
   "mcpServers": {
     "razify": {
       "command": "razify",
-      "args": ["mcp"]
+      "args": ["mcp", "--workspace", "/path/to/project"]
     }
   }
 }`
@@ -218,7 +381,7 @@ func SampleMCPConfigAntigravity() string {
   "mcpServers": {
     "razify": {
       "command": "razify",
-      "args": ["mcp"]
+      "args": ["mcp", "--workspace", "${workspaceFolder}"]
     }
   }
 }`

@@ -8,7 +8,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
-	"runtime"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -34,41 +34,73 @@ func CheckDockerAvailable(ctx context.Context) error {
 	return nil
 }
 
-// FindEnvFilesToMask discovers .env and .env.* files in the root of the workspace.
+// FindEnvFilesToMask discovers .env and .env.* files across the workspace recursively,
+// excluding templates/samples (.env.example, .env.sample, .env.template, etc.)
+// and ignoring common dependency directories (.git, node_modules, vendor, .venv).
+// Returned paths are relative to workspaceDir using forward slashes.
 func FindEnvFilesToMask(workspaceDir string) ([]string, error) {
 	if workspaceDir == "" {
 		workspaceDir = "."
 	}
 
-	entries, err := os.ReadDir(workspaceDir)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read workspace directory: %w", err)
-	}
-
 	var envFiles []string
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		name := entry.Name()
-		if name == ".env" || strings.HasPrefix(name, ".env.") {
-			envFiles = append(envFiles, name)
-		}
+	ignoredDirs := map[string]bool{
+		".git":         true,
+		"node_modules": true,
+		"vendor":       true,
+		".venv":        true,
 	}
 
+	err := filepath.WalkDir(workspaceDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			if ignoredDirs[d.Name()] && path != workspaceDir {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		name := d.Name()
+		lower := strings.ToLower(name)
+
+		// Exclude template, sample, and example files
+		if strings.Contains(lower, ".example") ||
+			strings.Contains(lower, ".sample") ||
+			strings.Contains(lower, ".template") {
+			return nil
+		}
+
+		// Match .env, .env.*, and *.env files
+		if name == ".env" || strings.HasPrefix(name, ".env.") || strings.HasSuffix(name, ".env") {
+			rel, err := filepath.Rel(workspaceDir, path)
+			if err != nil {
+				return nil
+			}
+			cleanRel := filepath.ToSlash(filepath.Clean(rel))
+			cleanRel = strings.TrimPrefix(cleanRel, "./")
+			envFiles = append(envFiles, cleanRel)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to walk workspace directory: %w", err)
+	}
+
+	sort.Strings(envFiles)
 	return envFiles, nil
 }
 
 // ResolveUser determines the container UID:GID mapping.
-// Returns $(id -u):$(id -g) on native Unix systems, and empty on Windows unless explicitly overridden.
+// Defaults to "1000:1000" as a fixed non-root user on all platforms unless explicitly overridden.
 func ResolveUser(configuredUser string) string {
 	if configuredUser != "" {
 		return configuredUser
 	}
-	if runtime.GOOS == "windows" {
-		return ""
-	}
-	return fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid())
+	return "1000:1000"
 }
 
 // RunResult holds the output and exit status of a sandbox execution.
@@ -119,6 +151,7 @@ func Execute(
 		}
 		emptyTempPath = emptyFile.Name()
 		_ = emptyFile.Close()
+		_ = os.Chmod(emptyTempPath, 0666)
 		defer os.Remove(emptyTempPath)
 	}
 

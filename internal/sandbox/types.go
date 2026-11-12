@@ -29,9 +29,15 @@ type Config struct {
 	AutoRemove bool  `json:"auto_remove"` // default true
 
 	// Guardrail Overrides (flag tracking for validation)
-	Privileged bool   `json:"privileged"`
-	PidMode    string `json:"pid_mode"`
-	Seccomp    string `json:"seccomp"`
+	Privileged  bool     `json:"privileged"`
+	PidMode     string   `json:"pid_mode"`
+	Seccomp     string   `json:"seccomp"`
+	CapAdd      []string `json:"cap_add"`
+	Device      []string `json:"device"`
+	IpcMode     string   `json:"ipc_mode"`
+	UsernsMode  string   `json:"userns_mode"`
+	AppArmor    string   `json:"apparmor"`
+	SecurityOpt []string `json:"security_opt"`
 
 	// Secret Handling
 	FakeSecrets   bool     `json:"fake_secrets"`

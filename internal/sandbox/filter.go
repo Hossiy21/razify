@@ -6,31 +6,6 @@ import (
 	"github.com/Hossiy21/razify/internal/scanner"
 )
 
-// SandboxConfig specifies runtime constraints for sandboxed command execution.
-type SandboxConfig struct {
-	ReadOnlyRootfs bool
-	DropCaps       bool
-	NetworkMode    string // "none", "host", or allowlist
-	AllowNetwork   bool
-	NetworkAllow   []string
-	User           string
-	MemoryLimit    string
-	CPULimit       string
-	DryRun         bool
-}
-
-// DefaultSandboxConfig returns the secure default configuration.
-func DefaultSandboxConfig() SandboxConfig {
-	return SandboxConfig{
-		ReadOnlyRootfs: true,
-		DropCaps:       true,
-		NetworkMode:    "none",
-		AllowNetwork:   false,
-		User:           "1000:1000",
-		DryRun:         false,
-	}
-}
-
 // FilterEnv filters a given map of environment variables so only schema-approved keys are included.
 func FilterEnv(sourceEnv map[string]string, approvedKeys []string) map[string]string {
 	approvedMap := make(map[string]bool, len(approvedKeys))

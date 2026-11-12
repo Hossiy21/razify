@@ -3,6 +3,8 @@ package cmd
 import (
 	"os"
 	"testing"
+
+	"github.com/Hossiy21/razify/internal/schema"
 )
 
 func TestShannonEntropy(t *testing.T) {
@@ -80,7 +82,7 @@ SECRET=sk_live_123
 	tmpfile.WriteString(content)
 	tmpfile.Close()
 
-	vars, err := ParseEnvWithMetadata(tmpfile.Name())
+	vars, err := schema.ParseEnvWithMetadata(tmpfile.Name())
 	if err != nil {
 		t.Fatalf("ParseEnvWithMetadata failed: %v", err)
 	}

@@ -55,6 +55,48 @@ func TestValidateGuardrails_Rejections(t *testing.T) {
 			},
 			wantErrText: "mounting the Docker daemon socket is prohibited",
 		},
+		{
+			name: "reject cap-add SYS_ADMIN",
+			cfg: sandbox.Config{
+				CapAdd: []string{"SYS_ADMIN"},
+			},
+			wantErrText: "--cap-add SYS_ADMIN is prohibited",
+		},
+		{
+			name: "reject device passthrough",
+			cfg: sandbox.Config{
+				Device: []string{"/dev/sda"},
+			},
+			wantErrText: "--device is prohibited",
+		},
+		{
+			name: "reject host ipc mode",
+			cfg: sandbox.Config{
+				IpcMode: "host",
+			},
+			wantErrText: "--ipc=host is prohibited",
+		},
+		{
+			name: "reject host userns mode",
+			cfg: sandbox.Config{
+				UsernsMode: "host",
+			},
+			wantErrText: "--userns=host is prohibited",
+		},
+		{
+			name: "reject unconfined apparmor",
+			cfg: sandbox.Config{
+				AppArmor: "unconfined",
+			},
+			wantErrText: "apparmor=unconfined is prohibited",
+		},
+		{
+			name: "reject security-opt label disable",
+			cfg: sandbox.Config{
+				SecurityOpt: []string{"label=disable"},
+			},
+			wantErrText: "label disable is prohibited",
+		},
 	}
 
 	for _, tc := range testCases {
