@@ -30,6 +30,7 @@ remediation commands for every diagnostic failure.`,
 		fastMode, _ := cmd.Flags().GetBool("fast")
 		probeRemote, _ := cmd.Flags().GetBool("probe-remote")
 		timeoutMs, _ := cmd.Flags().GetInt("timeout")
+		minScore, _ := cmd.Flags().GetInt("min-score")
 
 		envFile := ".env"
 		exampleFile := ".env.example"
@@ -63,6 +64,7 @@ remediation commands for every diagnostic failure.`,
 			Fast:          fastMode,
 			ProbeRemote:   probeRemote,
 			Timeout:       time.Duration(timeoutMs) * time.Millisecond,
+			MinScore:      minScore,
 		}
 
 		deps := doctor.NewDefaultDependencies()
@@ -188,4 +190,5 @@ func init() {
 	doctorCmd.Flags().Bool("fast", false, "Fast mode: skip network and service probes (sub-10ms)")
 	doctorCmd.Flags().Bool("probe-remote", false, "Probe remote non-localhost services (default: localhost only)")
 	doctorCmd.Flags().Int("timeout", 300, "Connection probe timeout in milliseconds")
+	doctorCmd.Flags().Int("min-score", 90, "Minimum health score required to pass (default 90)")
 }

@@ -4,7 +4,7 @@ package doctor
 //
 // Weight Distribution:
 // 1. Environment & Git Integrity (35 points):
-//    - GitignoreLeakGuard: 15 pts (.env must be shielded in .gitignore)
+//    - GitignoreLeakGuard: 15 pts (.env shielded in .gitignore and NOT tracked in git index)
 //    - EnvFilePresent:     10 pts (.env file must exist)
 //    - ExampleFilePresent: 10 pts (.env.example schema template must exist)
 //
@@ -14,13 +14,17 @@ package doctor
 //    - SchemaTypes:         8 pts (Variables satisfy @type, @enum, @range constraints)
 //
 // 3. Toolchain Readiness (15 points):
-//    - ToolchainGo:         5 pts (Go 1.25+ detected in PATH)
-//    - ToolchainNode:       5 pts (Node.js runtime detected in PATH)
-//    - ToolchainDocker:     5 pts (Docker CLI installed and daemon responding)
+//    - Toolchains are evaluated ONLY if relevant to the project type:
+//        * Go:         go.mod present
+//        * Node.js:    package.json present
+//        * Python:     requirements.txt, pyproject.toml, or Pipfile present
+//        * Docker:     Dockerfile or docker-compose.yml present
+//      Irrelevant toolchain points are redistributed evenly among relevant toolchains
+//      so that the Toolchains category always totals 15 points.
 //
 // 4. Ports & Services (15 points):
-//    - PortConflicts:       8 pts (All declared TCP ports are unallocated and free to bind)
-//    - ServiceReachability: 7 pts (All declared DB/services accept TCP connect on localhost)
+//    - PortConflicts:       8 pts (Declared ports free; in-use ports flagged as warning)
+//    - ServiceReachability: 7 pts (Declared DB/services accept TCP connect on localhost)
 const (
 	WeightGitignoreLeakGuard = 15
 	WeightEnvFilePresent     = 10
@@ -30,13 +34,9 @@ const (
 	WeightSchemaRequiredVars = 12
 	WeightSchemaTypes        = 8
 
-	WeightToolchainGo     = 5
-	WeightToolchainNode   = 5
-	WeightToolchainDocker = 5
-
+	WeightToolchainsTotal     = 15
 	WeightPortConflicts       = 8
 	WeightServiceReachability = 7
 
 	TotalMaxHealthScore = 100
 )
-

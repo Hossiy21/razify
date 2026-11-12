@@ -68,3 +68,13 @@ func TestDoctorCmd_ExitCodeOverride(t *testing.T) {
 	}
 }
 
+func TestDoctorCmd_MinScoreFlag(t *testing.T) {
+	flag := doctorCmd.Flags().Lookup("min-score")
+	if flag == nil {
+		t.Fatal("expected --min-score flag on doctorCmd")
+	}
+	if flag.DefValue != "90" {
+		t.Errorf("expected default min-score 90, got %s", flag.DefValue)
+	}
+}
+

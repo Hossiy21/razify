@@ -3,7 +3,7 @@ package doctor
 import "testing"
 
 func BenchmarkDoctor_Fast(b *testing.B) {
-	deps, _, _, _, _ := defaultHealthyDeps()
+	deps, _, _, _, _, _ := defaultHealthyDeps()
 	opts := DoctorOptions{Fast: true}
 
 	b.ResetTimer()
@@ -16,7 +16,7 @@ func BenchmarkDoctor_Fast(b *testing.B) {
 }
 
 func BenchmarkDoctor_FullMocked(b *testing.B) {
-	deps, _, _, _, _ := defaultHealthyDeps()
+	deps, _, _, _, _, _ := defaultHealthyDeps()
 	opts := DoctorOptions{Fast: false}
 
 	b.ResetTimer()
@@ -27,4 +27,3 @@ func BenchmarkDoctor_FullMocked(b *testing.B) {
 		}
 	}
 }
-

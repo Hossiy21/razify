@@ -1,6 +1,7 @@
 package doctor
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"net"
@@ -21,26 +22,29 @@ type DoctorOptions struct {
 	EnvFile       string
 	ExampleFile   string
 	GitignoreFile string
-	Fast          bool          // Skip port and service network probes
-	ProbeRemote   bool          // Probe remote databases/services (default: localhost only)
+	Fast          bool          // Skip port and service network probes, skip docker daemon probe
+	ProbeRemote   bool          // Probe remote databases/services (default: literal localhost only)
 	Timeout       time.Duration // Probe connection timeout (default: 300ms)
+	MinScore      int           // Minimum health score required to pass (default: 90)
 }
 
-// Dependencies contains the pluggable runners and probers for testing.
+// Dependencies contains the pluggable runners and probers for hermetic testing.
 type Dependencies struct {
 	FS          FileSystem
 	Runner      ToolchainRunner
 	PortChecker PortChecker
 	Prober      ServiceProber
+	Git         GitChecker
 }
 
-// NewDefaultDependencies constructs production OS and network drivers.
+// NewDefaultDependencies constructs production OS, git, and network drivers.
 func NewDefaultDependencies() Dependencies {
 	return Dependencies{
 		FS:          &OSFileSystem{},
 		Runner:      &OSToolchainRunner{},
 		PortChecker: &NetPortChecker{},
 		Prober:      &NetServiceProber{},
+		Git:         &OSGitChecker{},
 	}
 }
 
@@ -58,11 +62,14 @@ func RunDoctor(opts DoctorOptions, deps Dependencies) DoctorReport {
 	if opts.Timeout <= 0 {
 		opts.Timeout = 300 * time.Millisecond
 	}
+	if opts.MinScore <= 0 {
+		opts.MinScore = 90
+	}
 
 	var checks []CheckResult
 
 	// 1. Environment & Git Integrity Checks
-	gitCheck := checkGitignore(opts.GitignoreFile, opts.EnvFile, deps.FS)
+	gitCheck := checkGit(opts.GitignoreFile, opts.EnvFile, deps.FS, deps.Git)
 	checks = append(checks, gitCheck)
 
 	envFileCheck, envBytes := checkEnvFile(opts.EnvFile, deps.FS)
@@ -78,32 +85,15 @@ func RunDoctor(opts DoctorOptions, deps Dependencies) DoctorReport {
 	reqCheck, typesCheck := checkSchema(opts.EnvFile, envBytes, exampleBytes)
 	checks = append(checks, reqCheck, typesCheck)
 
-	// 3. Toolchain Readiness Checks (concurrent)
-	var goCheck, nodeCheck, dockerCheck CheckResult
-	var toolchainWg sync.WaitGroup
-	toolchainWg.Add(3)
+	// 3. Toolchain Readiness Checks (scored only for detected project types)
+	toolchainChecks := checkToolchains(deps.FS, deps.Runner, opts.Fast)
+	checks = append(checks, toolchainChecks...)
 
-	go func() {
-		defer toolchainWg.Done()
-		goCheck = checkToolchainGo(deps.Runner)
-	}()
-	go func() {
-		defer toolchainWg.Done()
-		nodeCheck = checkToolchainNode(deps.Runner)
-	}()
-	go func() {
-		defer toolchainWg.Done()
-		dockerCheck = checkToolchainDocker(deps.Runner)
-	}()
-
-	toolchainWg.Wait()
-	checks = append(checks, goCheck, nodeCheck, dockerCheck)
-
-	// 4. Port Conflict Checks
+	// 4. Port Conflict Checks (127.0.0.1 only, Dial first, warning on in-use)
 	portCheck := checkPorts(opts.EnvFile, envBytes, exampleBytes, deps.PortChecker, opts.Fast)
 	checks = append(checks, portCheck)
 
-	// 5. Database & Service Probes
+	// 5. Database & Service Probes (literal localhost only, concurrent timeouts)
 	serviceCheck := checkServices(opts.EnvFile, envBytes, deps.Prober, opts.Fast, opts.ProbeRemote, opts.Timeout)
 	checks = append(checks, serviceCheck)
 
@@ -167,14 +157,14 @@ func RunDoctor(opts DoctorOptions, deps Dependencies) DoctorReport {
 	}
 
 	healthStatus := "HEALTHY"
-	if healthScore < 70 || failedCount >= 2 {
+	if healthScore < opts.MinScore-20 || failedCount >= 2 {
 		healthStatus = "UNHEALTHY"
-	} else if healthScore < 90 || failedCount > 0 {
+	} else if healthScore < opts.MinScore || failedCount > 0 {
 		healthStatus = "DEGRADED"
 	}
 
 	unifiedStatus := "PASSED"
-	if healthStatus == "UNHEALTHY" || failedCount > 0 {
+	if healthScore < opts.MinScore || failedCount > 0 {
 		unifiedStatus = "FAILED"
 	}
 
@@ -199,7 +189,7 @@ func RunDoctor(opts DoctorOptions, deps Dependencies) DoctorReport {
 	}
 }
 
-func checkGitignore(gitignorePath, envFile string, fs FileSystem) CheckResult {
+func checkGit(gitignorePath, envFile string, fs FileSystem, git GitChecker) CheckResult {
 	res := CheckResult{
 		ID:        "razify/doctor/gitignore-missing",
 		Category:  "git",
@@ -208,6 +198,37 @@ func checkGitignore(gitignorePath, envFile string, fs FileSystem) CheckResult {
 		Target:    gitignorePath,
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	// 1. Try git commands if GitChecker is available
+	if git != nil {
+		tracked, errTrack := git.IsTracked(ctx, envFile)
+		if errTrack == nil && tracked {
+			res.Status = StatusFailed
+			res.PointsEarned = 0
+			res.Message = fmt.Sprintf("%s is tracked in the git index! Secrets will be committed on git push.", envFile)
+			res.Fix = fmt.Sprintf("git rm --cached %s", envFile)
+			return res
+		}
+
+		ignored, errIgnore := git.CheckIgnore(ctx, envFile)
+		if errIgnore == nil {
+			if ignored {
+				res.Status = StatusPassed
+				res.PointsEarned = WeightGitignoreLeakGuard
+				res.Message = fmt.Sprintf("%s is properly shielded and untracked in git", envFile)
+				return res
+			}
+			res.Status = StatusFailed
+			res.PointsEarned = 0
+			res.Message = fmt.Sprintf("%s is not ignored by git; risk of secret leaks", envFile)
+			res.Fix = fmt.Sprintf("echo %q >> %s", envFile, gitignorePath)
+			return res
+		}
+	}
+
+	// 2. Fallback to reading .gitignore file directly
 	if !fs.FileExists(gitignorePath) {
 		res.Status = StatusFailed
 		res.PointsEarned = 0
@@ -241,7 +262,7 @@ func checkGitignore(gitignorePath, envFile string, fs FileSystem) CheckResult {
 	if envPatternFound {
 		res.Status = StatusPassed
 		res.PointsEarned = WeightGitignoreLeakGuard
-		res.Message = fmt.Sprintf("%s properly shields %s from git commits", gitignorePath, envFile)
+		res.Message = fmt.Sprintf("%s shields %s from git commits", gitignorePath, envFile)
 	} else {
 		res.Status = StatusFailed
 		res.PointsEarned = 0
@@ -453,15 +474,122 @@ func checkSchema(envPath string, envBytes, exampleBytes []byte) (CheckResult, Ch
 	return reqRes, typeRes
 }
 
-func checkToolchainGo(runner ToolchainRunner) CheckResult {
+func checkToolchains(fs FileSystem, runner ToolchainRunner, fast bool) []CheckResult {
+	// 1. Detect project types based on presence of manifests
+	hasGo := fs.FileExists("go.mod")
+	hasNode := fs.FileExists("package.json")
+	hasPython := fs.FileExists("requirements.txt") || fs.FileExists("pyproject.toml") || fs.FileExists("Pipfile")
+	hasDocker := fs.FileExists("Dockerfile") || fs.FileExists("docker-compose.yml") || fs.FileExists("docker-compose.yaml") || fs.FileExists("compose.yaml") || fs.FileExists("compose.yml")
+
+	type toolPlan struct {
+		name      string
+		relevant  bool
+		runProbe  func(ctx context.Context, points int) CheckResult
+		skipMsg   string
+	}
+
+	plans := []toolPlan{
+		{
+			name:     "Go",
+			relevant: hasGo,
+			skipMsg:  "Skipped: not a Go project (no go.mod found)",
+			runProbe: func(ctx context.Context, points int) CheckResult {
+				return probeGo(ctx, runner, points)
+			},
+		},
+		{
+			name:     "Node.js",
+			relevant: hasNode,
+			skipMsg:  "Skipped: not a Node.js project (no package.json found)",
+			runProbe: func(ctx context.Context, points int) CheckResult {
+				return probeNode(ctx, runner, points)
+			},
+		},
+		{
+			name:     "Python",
+			relevant: hasPython,
+			skipMsg:  "Skipped: not a Python project (no requirements.txt/pyproject.toml found)",
+			runProbe: func(ctx context.Context, points int) CheckResult {
+				return probePython(ctx, runner, points)
+			},
+		},
+		{
+			name:     "Docker",
+			relevant: hasDocker,
+			skipMsg:  "Skipped: not a containerized project (no Dockerfile/compose.yaml found)",
+			runProbe: func(ctx context.Context, points int) CheckResult {
+				return probeDocker(ctx, runner, fast, points)
+			},
+		},
+	}
+
+	// Count relevant toolchains to redistribute WeightToolchainsTotal (15 pts)
+	relevantCount := 0
+	for _, p := range plans {
+		if p.relevant {
+			relevantCount++
+		}
+	}
+
+	// If no project manifests detected at all, default to evaluating Go as baseline (or fallback equally)
+	if relevantCount == 0 {
+		plans[0].relevant = true
+		relevantCount = 1
+	}
+
+	basePoints := WeightToolchainsTotal / relevantCount
+	remainder := WeightToolchainsTotal % relevantCount
+
+	var results []CheckResult
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+
+	for i := range plans {
+		p := &plans[i]
+		if !p.relevant {
+			results = append(results, CheckResult{
+				ID:        fmt.Sprintf("razify/doctor/toolchain-%s", strings.ToLower(p.name)),
+				Category:  "toolchain",
+				Name:      fmt.Sprintf("%s Toolchain", p.name),
+				Status:    StatusSkipped,
+				Message:   p.skipMsg,
+				MaxPoints: 0,
+			})
+			continue
+		}
+
+		pts := basePoints
+		if remainder > 0 {
+			pts++
+			remainder--
+		}
+
+		wg.Add(1)
+		go func(plan toolPlan, points int) {
+			defer wg.Done()
+			ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
+			defer cancel()
+
+			res := plan.runProbe(ctx, points)
+			mu.Lock()
+			results = append(results, res)
+			mu.Unlock()
+		}(*p, pts)
+	}
+
+	wg.Wait()
+	return results
+}
+
+func probeGo(ctx context.Context, runner ToolchainRunner, points int) CheckResult {
 	res := CheckResult{
 		ID:        "razify/doctor/toolchain-go",
 		Category:  "toolchain",
 		Name:      "Go Toolchain",
-		MaxPoints: WeightToolchainGo,
+		MaxPoints: points,
 	}
 
-	out, err := runner.Run("go", "version")
+	out, err := runner.Run(ctx, "go", "version")
 	if err != nil {
 		res.Status = StatusFailed
 		res.PointsEarned = 0
@@ -470,12 +598,11 @@ func checkToolchainGo(runner ToolchainRunner) CheckResult {
 		return res
 	}
 
-	// Output format: "go version go1.25.1 linux/amd64" or "go version go1.27.0-alpine ..."
 	re := regexp.MustCompile(`go([0-9]+)\.([0-9]+)`)
 	matches := re.FindStringSubmatch(out)
 	if len(matches) < 3 {
 		res.Status = StatusWarning
-		res.PointsEarned = WeightToolchainGo / 2
+		res.PointsEarned = points / 2
 		res.Message = fmt.Sprintf("Go installed but unable to parse version: %s", strings.TrimSpace(out))
 		res.Fix = "Upgrade Go to 1.25+ from https://go.dev/dl/"
 		return res
@@ -486,7 +613,7 @@ func checkToolchainGo(runner ToolchainRunner) CheckResult {
 
 	if major > 1 || (major == 1 && minor >= 25) {
 		res.Status = StatusPassed
-		res.PointsEarned = WeightToolchainGo
+		res.PointsEarned = points
 		res.Message = fmt.Sprintf("Go %d.%d detected (satisfies >= 1.25)", major, minor)
 	} else {
 		res.Status = StatusFailed
@@ -498,15 +625,15 @@ func checkToolchainGo(runner ToolchainRunner) CheckResult {
 	return res
 }
 
-func checkToolchainNode(runner ToolchainRunner) CheckResult {
+func probeNode(ctx context.Context, runner ToolchainRunner, points int) CheckResult {
 	res := CheckResult{
 		ID:        "razify/doctor/toolchain-node",
 		Category:  "toolchain",
 		Name:      "Node.js Runtime",
-		MaxPoints: WeightToolchainNode,
+		MaxPoints: points,
 	}
 
-	out, err := runner.Run("node", "-v")
+	out, err := runner.Run(ctx, "node", "--version")
 	if err != nil {
 		res.Status = StatusWarning
 		res.PointsEarned = 0
@@ -517,32 +644,78 @@ func checkToolchainNode(runner ToolchainRunner) CheckResult {
 
 	version := strings.TrimSpace(out)
 	res.Status = StatusPassed
-	res.PointsEarned = WeightToolchainNode
+	res.PointsEarned = points
 	res.Message = fmt.Sprintf("Node.js runtime %s detected", version)
 	return res
 }
 
-func checkToolchainDocker(runner ToolchainRunner) CheckResult {
+func probePython(ctx context.Context, runner ToolchainRunner, points int) CheckResult {
 	res := CheckResult{
-		ID:        "razify/doctor/toolchain-docker",
+		ID:        "razify/doctor/toolchain-python",
 		Category:  "toolchain",
-		Name:      "Docker Engine",
-		MaxPoints: WeightToolchainDocker,
+		Name:      "Python Runtime",
+		MaxPoints: points,
 	}
 
-	out, err := runner.Run("docker", "--version")
+	out, err := runner.Run(ctx, "python3", "--version")
+	if err != nil {
+		out, err = runner.Run(ctx, "python", "--version")
+	}
 	if err != nil {
 		res.Status = StatusWarning
 		res.PointsEarned = 0
-		res.Message = "Docker CLI not found or daemon not reachable"
-		res.Fix = "Install Docker from https://docs.docker.com/get-docker/ and ensure the daemon is running"
+		res.Message = "Python interpreter not found in PATH"
+		res.Fix = "Install Python 3 from https://www.python.org/"
 		return res
 	}
 
 	version := strings.TrimSpace(out)
 	res.Status = StatusPassed
-	res.PointsEarned = WeightToolchainDocker
-	res.Message = fmt.Sprintf("Docker detected (%s)", version)
+	res.PointsEarned = points
+	res.Message = fmt.Sprintf("Python %s detected", version)
+	return res
+}
+
+func probeDocker(ctx context.Context, runner ToolchainRunner, fast bool, points int) CheckResult {
+	res := CheckResult{
+		ID:        "razify/doctor/toolchain-docker",
+		Category:  "toolchain",
+		Name:      "Docker Engine",
+		MaxPoints: points,
+	}
+
+	// 1. Check if Docker CLI binary is installed
+	out, err := runner.Run(ctx, "docker", "--version")
+	if err != nil {
+		res.Status = StatusWarning
+		res.PointsEarned = 0
+		res.Message = "Docker CLI not found in PATH"
+		res.Fix = "Install Docker from https://docs.docker.com/get-docker/"
+		return res
+	}
+	cliVersion := strings.TrimSpace(out)
+
+	// 2. In --fast mode, skip the daemon check
+	if fast {
+		res.Status = StatusPassed
+		res.PointsEarned = points
+		res.Message = fmt.Sprintf("%s detected (daemon check skipped in --fast mode)", cliVersion)
+		return res
+	}
+
+	// 3. Probe if Docker daemon is actively responding
+	daemonOut, daemonErr := runner.Run(ctx, "docker", "info", "--format", "{{.ServerVersion}}")
+	if daemonErr != nil || strings.TrimSpace(daemonOut) == "" {
+		res.Status = StatusWarning
+		res.PointsEarned = points / 2
+		res.Message = fmt.Sprintf("%s installed, but Docker daemon is not running", cliVersion)
+		res.Fix = "Start Docker Desktop or system Docker service"
+		return res
+	}
+
+	res.Status = StatusPassed
+	res.PointsEarned = points
+	res.Message = fmt.Sprintf("Docker CLI %s & daemon %s active", cliVersion, strings.TrimSpace(daemonOut))
 	return res
 }
 
@@ -604,20 +777,22 @@ func checkPorts(envPath string, envBytes, exampleBytes []byte, checker PortCheck
 		return res
 	}
 
-	var conflicts []string
-	var conflictPorts []int
+	var inUsePorts []string
+	var conflictNumbers []int
 	for port, key := range ports {
-		if err := checker.CheckPort(port); err != nil {
-			conflicts = append(conflicts, fmt.Sprintf("%d (%s)", port, key))
-			conflictPorts = append(conflictPorts, port)
+		inUse, _ := checker.CheckPort(port)
+		if inUse {
+			inUsePorts = append(inUsePorts, fmt.Sprintf("%d (%s)", port, key))
+			conflictNumbers = append(conflictNumbers, port)
 		}
 	}
 
-	if len(conflicts) > 0 {
-		res.Status = StatusFailed
-		res.PointsEarned = 0
-		res.Message = fmt.Sprintf("Port conflict: port(s) %s already in use by another process", strings.Join(conflicts, ", "))
-		res.Fix = fmt.Sprintf("lsof -ti :%d | xargs kill -9 (or change port in %s)", conflictPorts[0], envPath)
+	// Notice: Per requirements, port in use is treated as a WARNING (may be the user's dev server), not failure.
+	if len(inUsePorts) > 0 {
+		res.Status = StatusWarning
+		res.PointsEarned = WeightPortConflicts
+		res.Message = fmt.Sprintf("Port(s) currently in use: %s (may be an active local dev server)", strings.Join(inUsePorts, ", "))
+		res.Fix = fmt.Sprintf("lsof -ti :%d | xargs kill -9 (if occupied by an unexpected process)", conflictNumbers[0])
 		return res
 	}
 
@@ -639,6 +814,13 @@ type serviceEndpoint struct {
 	Scheme  string
 	Masked  string
 	IsLocal bool
+}
+
+func isLiteralLocalhost(host string) bool {
+	h := strings.TrimSpace(host)
+	h = strings.TrimPrefix(h, "[")
+	h = strings.TrimSuffix(h, "]")
+	return h == "localhost" || h == "127.0.0.1" || h == "::1"
 }
 
 func extractDeclaredServices(envBytes []byte) []serviceEndpoint {
@@ -689,9 +871,7 @@ func extractDeclaredServices(envBytes []byte) []serviceEndpoint {
 			}
 		}
 
-		isLocal := host == "localhost" || host == "127.0.0.1" || host == "::1" || host == "0.0.0.0" || strings.HasPrefix(host, "127.")
-
-		// Mask credentials strictly: scheme://***@host:port/path
+		isLocal := isLiteralLocalhost(host)
 		masked := fmt.Sprintf("%s://%s:%s", u.Scheme, host, port)
 
 		endpoints = append(endpoints, serviceEndpoint{
@@ -712,7 +892,7 @@ func extractDeclaredServices(envBytes []byte) []serviceEndpoint {
 		host := envMap[hostKey]
 		port := envMap[portKey]
 		if host != "" && port != "" {
-			isLocal := host == "localhost" || host == "127.0.0.1" || host == "::1" || host == "0.0.0.0" || strings.HasPrefix(host, "127.")
+			isLocal := isLiteralLocalhost(host)
 			endpoints = append(endpoints, serviceEndpoint{
 				Key:     hostKey + "/" + portKey,
 				Host:    host,
@@ -752,7 +932,9 @@ func checkServices(envPath string, envBytes []byte, prober ServiceProber, fast, 
 
 	var unreachable []string
 	var skippedRemote []string
-	testedCount := 0
+	var testedCount int
+	var mu sync.Mutex
+	var wg sync.WaitGroup
 
 	for _, ep := range endpoints {
 		if !ep.IsLocal && !probeRemote {
@@ -761,11 +943,20 @@ func checkServices(envPath string, envBytes []byte, prober ServiceProber, fast, 
 		}
 
 		testedCount++
-		addr := net.JoinHostPort(ep.Host, ep.Port)
-		if err := prober.Probe("tcp", addr, timeout); err != nil {
-			unreachable = append(unreachable, fmt.Sprintf("%s (%s)", ep.Masked, ep.Key))
-		}
+		wg.Add(1)
+		go func(target serviceEndpoint) {
+			defer wg.Done()
+			addr := net.JoinHostPort(target.Host, target.Port)
+			err := prober.Probe("tcp", addr, timeout)
+			mu.Lock()
+			defer mu.Unlock()
+			if err != nil {
+				unreachable = append(unreachable, fmt.Sprintf("%s (%s)", target.Masked, target.Key))
+			}
+		}(ep)
 	}
+
+	wg.Wait()
 
 	if len(unreachable) > 0 {
 		res.Status = StatusFailed
@@ -791,4 +982,3 @@ func checkServices(envPath string, envBytes []byte, prober ServiceProber, fast, 
 	res.Message = msg
 	return res
 }
-
