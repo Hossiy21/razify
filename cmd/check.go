@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/Hossiy21/razify/internal/reporter"
 	"github.com/Hossiy21/razify/internal/scanner"
@@ -233,15 +234,18 @@ func RunCheck(envFile, exampleFile string) (CheckOutput, error) {
 		status = "FAILED"
 	}
 
+	cleanEnv := filepath.ToSlash(envFile)
+	cleanExample := filepath.ToSlash(exampleFile)
+
 	var remediation []string
 	if missing > 0 {
-		remediation = append(remediation, fmt.Sprintf("👉 Run 'razify fix %s %s' to sync missing keys into %s.", envFile, exampleFile, envFile))
+		remediation = append(remediation, fmt.Sprintf("👉 Run 'razify fix %s %s' to sync missing keys into %s.", cleanEnv, cleanExample, cleanEnv))
 	}
 	if criticalCount > 0 || highCount > 0 {
-		remediation = append(remediation, fmt.Sprintf("👉 Remove or obfuscate exposed API keys in %s before committing.", envFile))
+		remediation = append(remediation, fmt.Sprintf("👉 Remove or obfuscate exposed API keys in %s before committing.", cleanEnv))
 	}
 	if placeholder > 0 || empty > 0 {
-		remediation = append(remediation, fmt.Sprintf("👉 Replace placeholder values in %s with real development settings.", envFile))
+		remediation = append(remediation, fmt.Sprintf("👉 Replace placeholder values in %s with real development settings.", cleanEnv))
 	}
 
 	if valResults == nil {
@@ -252,8 +256,8 @@ func RunCheck(envFile, exampleFile string) (CheckOutput, error) {
 	}
 
 	output := CheckOutput{
-		EnvFile:           envFile,
-		ExampleFile:       exampleFile,
+		EnvFile:           cleanEnv,
+		ExampleFile:       cleanExample,
 		Status:            status,
 		ValidationResults: valResults,
 		ValidationSummary: schema.ValidateSummary{

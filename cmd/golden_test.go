@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -66,6 +67,9 @@ func TestGoldenCheckJSON(t *testing.T) {
 			normalizedOutput := output
 			normalizedOutput.EnvFile = filepath.ToSlash(output.EnvFile)
 			normalizedOutput.ExampleFile = filepath.ToSlash(output.ExampleFile)
+			for i, rem := range normalizedOutput.RemediationSteps {
+				normalizedOutput.RemediationSteps[i] = filepath.ToSlash(rem)
+			}
 
 			actualJSON, err := json.MarshalIndent(normalizedOutput, "", "  ")
 			if err != nil {
@@ -102,7 +106,11 @@ func TestGoldenCheckJSON(t *testing.T) {
 
 func TestExitCodes(t *testing.T) {
 	// Build razify binary for testing exit codes
-	binPath := filepath.Join(t.TempDir(), "razify_test_bin")
+	binName := "razify_test_bin"
+	if runtime.GOOS == "windows" {
+		binName += ".exe"
+	}
+	binPath := filepath.Join(t.TempDir(), binName)
 	buildCmd := exec.Command("go", "build", "-o", binPath, "..")
 	var buildErr bytes.Buffer
 	buildCmd.Stderr = &buildErr

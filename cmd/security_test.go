@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -11,7 +12,11 @@ import (
 // TestSecretsNeverExposed proves that raw secret values are never printed in plaintext
 // across --json, --sarif, or standard scan outputs.
 func TestSecretsNeverExposed(t *testing.T) {
-	binPath := filepath.Join(t.TempDir(), "razify_sec_test")
+	binName := "razify_sec_test"
+	if runtime.GOOS == "windows" {
+		binName += ".exe"
+	}
+	binPath := filepath.Join(t.TempDir(), binName)
 	buildCmd := exec.Command("go", "build", "-o", binPath, "..")
 	if err := buildCmd.Run(); err != nil {
 		t.Fatalf("failed to build test binary: %v", err)
