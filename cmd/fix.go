@@ -49,9 +49,9 @@ func acquireFileLock(filename string, maxRetries int) error {
 	}
 
 	if lastErr != nil {
-		return fmt.Errorf("could not acquire lock on %s after %d attempts: %w", filename, maxRetries, lastErr)
+		return fmt.Errorf("could not acquire lock on %s after %d attempts: lock file %q is held (safe to delete if no razify process is running): %w", filename, maxRetries, lockFile, lastErr)
 	}
-	return fmt.Errorf("could not acquire lock on %s after %d attempts", filename, maxRetries)
+	return fmt.Errorf("could not acquire lock on %s after %d attempts: lock file %q is held (safe to delete if no razify process is running)", filename, maxRetries, lockFile)
 }
 
 // releaseFileLock removes the lock file for a file
