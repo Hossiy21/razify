@@ -190,6 +190,37 @@ Every warning or failure provides a single copy-pasteable **Remediation Command*
 
 ---
 
+## 🔒 Agent-Safe Sandboxed Execution (`razify run --sandbox`)
+
+`razify run --sandbox` isolates command execution inside an unprivileged OCI container to reduce the risk of secret leakage, unwanted network egress, and unintended host filesystem modifications when executing untrusted or semi-trusted commands (such as those generated or driven by autonomous AI coding agents):
+
+```bash
+# Execute tests in an isolated sandbox with synthetic fake secrets and no network
+razify run --sandbox -- go test ./...
+
+# Run npm test using the Node project profile
+razify run --sandbox -- npm test
+
+# Preview the exact generated docker arguments without executing
+razify run --sandbox --dry-run -- pytest
+
+# Restrict injected variables to a specific subset
+razify run --sandbox --only PORT,DB_URL -- node server.js
+```
+
+### Core Security Controls & Defense-in-Depth
+- **Synthetic Secrets by Default (`--fake-secrets`)**: Generates deterministic synthetic values conforming to `.env.example` schema definitions (prefixed with `razify_fake_` so they never trip external scanners). Real credentials are never injected unless explicitly requested via `--inject-secrets`.
+- **Zero Arguments in Process Table**: Sensitive values are passed via Docker CLI process environments (`-e KEY`), never as plaintext inline command arguments (`-e KEY=value`).
+- **Network Isolation (`--network none`)**: Outbound TCP/UDP and DNS are disabled by default. Network egress requires explicit `--network bridge` (which warns loudly).
+- **Read-Only Workspace with `.git` Protection**: Host workspace is mounted `:ro`. Even if `--read-write` is specified, `.git` remains strictly read-only (`:ro`) to mitigate tampering with `.git/hooks` or CI workflows.
+- **`.env` File Masking**: Existing `.env` and `.env.*` files within the workspace are masked by bind-mounting an empty file over each one inside the container.
+- **Compiler Usability**: An exec-capable temporary scratch filesystem (`--tmpfs /tmp:rw,exec,nosuid,size=512m`) and dedicated cache mappings (`GOCACHE`, `GOMODCACHE`, `npm_config_cache`, `PYTHONPYCACHEPREFIX`) ensure `go build`, `npm`, and `pytest` function smoothly.
+- **Stream Masking**: Known secrets, along with their base64-encoded and URL-encoded variants, are automatically redacted from `stdout` and `stderr`.
+
+For complete details on threat boundaries, guardrail rejections, and residual risks, see [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md).
+
+---
+
 ## 🛡️ CI/CD & Team Enforcement
 
 ### Pre-Commit Git Hook
